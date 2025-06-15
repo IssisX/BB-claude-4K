@@ -405,6 +405,29 @@
             100% { transform: translateX(100%); }
         }
 
+        #physicsTestOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(12, 12, 32, 0.85); /* Slightly transparent version of body background */
+            backdrop-filter: blur(5px);
+            z-index: 1050; /* Higher than other builder UI */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #physicsTestCanvas {
+            border: 1px solid #e94560;
+            background: #1e1e30; /* Darker background for contrast */
+        }
+
+
         /* Enhanced Controls */
         #controls {
             background: linear-gradient(135deg, #0f3460, #e94560);
@@ -1217,24 +1240,32 @@
             // Add default achievements
             const achievementCount = await db.achievements.count();
             if (achievementCount === 0) {
-                await db.achievements.bulkAdd([
-                    { name: 'First Bot', description: 'Build your first bot', unlocked: false },
-                    { name: 'First Victory', description: 'Win your first battle', unlocked: false },
-                    { name: 'Destroyer', description: 'Deal 1000 total damage', unlocked: false },
-                    { name: 'Champion', description: 'Win a tournament', unlocked: false },
-                    { name: 'Master Builder', description: 'Create 10 different bots', unlocked: false }
-                ]);
+                try {
+                    await db.achievements.bulkAdd([
+                        { name: 'First Bot', description: 'Build your first bot', unlocked: false },
+                        { name: 'First Victory', description: 'Win your first battle', unlocked: false },
+                        { name: 'Destroyer', description: 'Deal 1000 total damage', unlocked: false },
+                        { name: 'Champion', description: 'Win a tournament', unlocked: false },
+                        { name: 'Master Builder', description: 'Create 10 different bots', unlocked: false }
+                    ]);
+                } catch (error) {
+                    console.error("Error adding default achievements:", error);
+                }
             }
 
             // Initialize settings
             const settingsCount = await db.settings.count();
             if (settingsCount === 0) {
-                await db.settings.bulkAdd([
-                    { key: 'playerLevel', value: 1 },
-                    { key: 'playerXP', value: 0 },
-                    { key: 'soundEnabled', value: true },
-                    { key: 'unlockedComponents', value: ['control_unit', 'wood_plank', 'small_wheel', 'electric_motor', 'small_battery'] }
-                ]);
+                try {
+                    await db.settings.bulkAdd([
+                        { key: 'playerLevel', value: 1 },
+                        { key: 'playerXP', value: 0 },
+                        { key: 'soundEnabled', value: true },
+                        { key: 'unlockedComponents', value: ['control_unit', 'wood_plank', 'small_wheel', 'electric_motor', 'small_battery'] }
+                    ]);
+                } catch (error) {
+                    console.error("Error adding default settings:", error);
+                }
             }
         });
 
@@ -1681,10 +1712,22 @@
 
             loadSounds() {
                 // Using Web Audio API to generate synthetic sounds
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    if (!this.audioContext) {
+                        console.warn("Web Audio API not supported or context creation failed. Sound will be disabled.");
+                        this.enabled = false;
+                    }
+                } catch (e) {
+                    console.warn("Error initializing AudioContext. Sound will be disabled.", e);
+                    this.enabled = false;
+                    this.audioContext = null; // Ensure it's null if failed
+                }
                 
-                // Generate sound effects
-                this.generateSounds();
+                // Generate sound effects (only if context is valid)
+                if (this.audioContext) {
+                    this.generateSounds();
+                }
             }
 
             generateSounds() {
@@ -1700,7 +1743,7 @@
             }
 
             playTone(frequency, duration, type = 'sine') {
-                if (!this.enabled) return;
+                if (!this.audioContext || !this.enabled) return;
                 
                 const oscillator = this.audioContext.createOscillator();
                 const gainNode = this.audioContext.createGain();
@@ -1719,7 +1762,7 @@
             }
 
             playNoise(duration) {
-                if (!this.enabled) return;
+                if (!this.audioContext || !this.enabled) return;
                 
                 const bufferSize = this.audioContext.sampleRate * duration;
                 const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
@@ -1743,7 +1786,7 @@
             }
 
             playExplosion() {
-                if (!this.enabled) return;
+                if (!this.audioContext || !this.enabled) return;
                 
                 // Create explosion sound with multiple frequency components
                 for (let i = 0; i < 5; i++) {
@@ -1755,7 +1798,7 @@
             }
 
             playMelody(frequencies, noteDuration) {
-                if (!this.enabled) return;
+                if (!this.audioContext || !this.enabled) return;
                 
                 frequencies.forEach((freq, index) => {
                     setTimeout(() => {
@@ -2529,19 +2572,168 @@
                     this.showMessage('No components to test!', 'warning');
                     return;
                 }
+
+                const buildArea = document.getElementById('buildArea');
+                if (!buildArea) {
+                    console.error("Build area not found for physics test.");
+                    return;
+                }
+
+                // Cleanup previous test if any (though button should handle this)
+                const existingOverlay = document.getElementById('physicsTestOverlay');
+                if (existingOverlay) existingOverlay.remove();
+                if (this.currentTestEngine) Engine.clear(this.currentTestEngine);
+                if (this.currentTestRender) Render.stop(this.currentTestRender);
+
+
+                const overlay = document.createElement('div');
+                overlay.id = 'physicsTestOverlay';
+                // Styles are now in CSS block
+
+                const testCanvas = document.createElement('canvas');
+                testCanvas.id = 'physicsTestCanvas';
+                // Set canvas size based on buildArea's gridCanvas, or a fixed reasonable size
+                const gridCanvasRect = document.getElementById('gridCanvas').getBoundingClientRect();
+                const canvasWidth = gridCanvasRect.width * 0.9; // Use 90% of grid canvas width
+                const canvasHeight = gridCanvasRect.height * 0.8; // Use 80% of grid canvas height
+                testCanvas.width = canvasWidth;
+                testCanvas.height = canvasHeight;
+
+                const returnBtn = document.createElement('button');
+                returnBtn.textContent = 'Return to Builder';
+                returnBtn.className = 'button'; // Use existing button style
+                returnBtn.style.marginTop = '20px';
+
+                overlay.appendChild(testCanvas);
+                overlay.appendChild(returnBtn);
+                document.body.appendChild(overlay); // Append to body to ensure it's on top
+
+                // --- Matter.js Setup ---
+                this.currentTestEngine = Engine.create();
+                this.currentTestEngine.world.gravity.y = 1;
+
+                this.currentTestRender = Render.create({
+                    element: overlay, // Render can manage its own canvas if element is provided
+                    canvas: testCanvas,
+                    engine: this.currentTestEngine,
+                    options: {
+                        width: canvasWidth,
+                        height: canvasHeight,
+                        wireframes: false,
+                        background: '#1e1e30'
+                    }
+                });
+
+                const ground = Bodies.rectangle(canvasWidth / 2, canvasHeight - 30, canvasWidth, 60, {
+                    isStatic: true,
+                    render: { fillStyle: '#666' }
+                });
+                World.add(this.currentTestEngine.world, ground);
+
+                // --- Recreate Bot ---
+                const placedComponents = JSON.parse(JSON.stringify(gameState.placedComponents)); // Deep copy
+                const corePlacedComponent = placedComponents.find(p => p.type === 'core' || p.required);
                 
-                // Simple physics preview - add some bouncing animations
-                document.querySelectorAll('.placed-component').forEach((div, index) => {
-                    setTimeout(() => {
-                        div.style.animation = 'bounce 1s ease-in-out';
-                        setTimeout(() => {
-                            div.style.animation = '';
-                        }, 1000);
-                    }, index * 100);
+                if (!corePlacedComponent) {
+                    this.showMessage('Cannot test bot without a core component!', 'error');
+                    overlay.remove();
+                    return;
+                }
+
+                const testBotBodies = [];
+                const testBotConstraints = [];
+                let testBotCoreBody = null;
+
+                // Define a central point for the bot in the test canvas
+                const botCenterX = canvasWidth / 2;
+                const botCenterY = canvasHeight / 2 - 100; // Position it a bit higher
+
+                // Create core body first
+                const coreDef = this.findComponentDefinition(corePlacedComponent.id);
+                testBotCoreBody = Bodies.rectangle(
+                    botCenterX,
+                    botCenterY,
+                    coreDef.width || 60,
+                    coreDef.height || 60,
+                    { mass: coreDef.mass, friction: 0.7, density: coreDef.mass / ((coreDef.width||60)*(coreDef.height||60))}
+                );
+                Body.setAngle(testBotCoreBody, corePlacedComponent.rotation * Math.PI / 180);
+                testBotBodies.push(testBotCoreBody);
+
+                placedComponents.forEach(pComp => {
+                    if (pComp.uid === corePlacedComponent.uid) return; // Already created core
+
+                    const definition = this.findComponentDefinition(pComp.id);
+                    if (!definition) return;
+
+                    // Calculate position relative to the core in the test world
+                    // Original offsets from builder grid core
+                    const offsetX = pComp.x - corePlacedComponent.x;
+                    const offsetY = pComp.y - corePlacedComponent.y;
+
+                    // Rotate offset according to core's rotation (simplified)
+                    // For a more accurate relative positioning with rotation, matrix math would be better.
+                    // This simplified version assumes components are attached as if core is not rotated, then the whole group is rotated.
+                    // A better way is to transform points relative to the core body AFTER the core body is rotated.
+
+                    const angle = pComp.rotation * Math.PI / 180;
+                    const worldX = testBotCoreBody.position.x + offsetX;
+                    const worldY = testBotCoreBody.position.y + offsetY;
+
+                    let newBody;
+                    if (definition.radius) { // Circle
+                        newBody = Bodies.circle(worldX, worldY, definition.radius, {
+                             mass: definition.mass, friction: 0.7, density: definition.mass / (Math.PI * definition.radius * definition.radius)
+                        });
+                    } else { // Rectangle
+                        newBody = Bodies.rectangle(worldX, worldY, definition.width || 40, definition.height || 40, {
+                            mass: definition.mass, friction: 0.7, density: definition.mass / ((definition.width||40)*(definition.height||40))
+                        });
+                    }
+                    Body.setAngle(newBody, angle);
+                    testBotBodies.push(newBody);
+
+                    // Simple weld constraint to the core body
+                    const constraint = Constraint.create({
+                        bodyA: testBotCoreBody,
+                        bodyB: newBody,
+                        pointA: { x: offsetX, y: offsetY }, // Anchor on core
+                        pointB: { x: 0, y: 0 }, // Anchor on newBody's center
+                        stiffness: 0.9, // Very stiff
+                        length: 0 // Effectively a weld if length is small or zero and stiffness high
+                    });
+                    testBotConstraints.push(constraint);
                 });
                 
-                this.showMessage('Physics test complete!', 'success');
-                audioManager.play('battle');
+                World.add(this.currentTestEngine.world, [...testBotBodies, ...testBotConstraints]);
+
+                // Apply test force
+                setTimeout(() => {
+                    if (testBotCoreBody && testBotCoreBody.position) { // Check if body still exists
+                        Body.applyForce(testBotCoreBody, testBotCoreBody.position, { x: 0.005 * testBotCoreBody.mass, y: -0.02 * testBotCoreBody.mass });
+                    }
+                }, 1000);
+                 setTimeout(() => {
+                    if (testBotCoreBody && testBotCoreBody.position) {
+                        Body.setAngularVelocity(testBotCoreBody, 0.05);
+                    }
+                }, 2000);
+
+
+                Engine.run(this.currentTestEngine);
+                Render.run(this.currentTestRender);
+
+                returnBtn.onclick = () => {
+                    Render.stop(this.currentTestRender);
+                    Engine.clear(this.currentTestEngine);
+                    World.clear(this.currentTestEngine.world, false); // false to keep static bodies if needed, true to remove all
+                    if (this.currentTestRender.canvas) this.currentTestRender.canvas.remove();
+                    if (this.currentTestRender.textures) this.currentTestRender.textures = {}; // Clear textures cache
+                    overlay.remove();
+                    this.currentTestEngine = null;
+                    this.currentTestRender = null;
+                };
+                audioManager.play('battle'); // Or a specific test sound
             }
 
             showMessage(text, type = 'info') {
@@ -4423,3 +4615,5 @@
     </script>
 </body>
 </html>
+
+[end of index.html]
