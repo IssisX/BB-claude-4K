@@ -1,0 +1,3985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BattleBots Arena - Ultimate Edition</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0c0c20, #1a1a2e);
+            color: #fff;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Enhanced Header */
+        #header {
+            background: linear-gradient(135deg, #e94560, #0f3460);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        #header h1 {
+            font-size: 1.8em;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        .level-indicator {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header-right {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .xp-bar {
+            width: 150px;
+            height: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .xp-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50, #8bc34a);
+            transition: width 0.5s ease;
+        }
+
+        /* Enhanced Mode Container */
+        #modeContainer {
+            flex: 1;
+            display: flex;
+            position: relative;
+        }
+
+        /* Advanced Builder Mode */
+        #builderMode {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        #componentPalette {
+            width: 320px;
+            background: linear-gradient(180deg, #1a1a2e, #16213e);
+            border-right: 3px solid #e94560;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .palette-header {
+            padding: 15px;
+            background: rgba(233, 69, 96, 0.1);
+            border-bottom: 1px solid #e94560;
+        }
+
+        .palette-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .palette-tab {
+            flex: 1;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 0.8em;
+            transition: all 0.3s ease;
+        }
+
+        .palette-tab.active {
+            background: #e94560;
+            box-shadow: 0 2px 10px rgba(233, 69, 96, 0.5);
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            color: #fff;
+            font-size: 0.9em;
+        }
+
+        .palette-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .componentCategory {
+            margin-bottom: 20px;
+        }
+
+        .componentCategory h3 {
+            color: #e94560;
+            margin-bottom: 10px;
+            font-size: 1em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .category-icon {
+            width: 20px;
+            height: 20px;
+            background: #e94560;
+            border-radius: 3px;
+        }
+
+        .component {
+            background: linear-gradient(135deg, #0f3460, #16213e);
+            border: 2px solid transparent;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: grab;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .component:hover {
+            transform: translateX(8px) scale(1.02);
+            border-color: #e94560;
+            box-shadow: 0 5px 25px rgba(233, 69, 96, 0.4);
+        }
+
+        .component.locked {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .component.locked::after {
+            content: "ðŸ”’";
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 0.8em;
+        }
+
+        .componentIcon {
+            width: 40px;
+            height: 40px;
+            margin-right: 12px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .componentInfo {
+            flex: 1;
+        }
+
+        .componentName {
+            font-weight: bold;
+            font-size: 1em;
+            margin-bottom: 2px;
+        }
+
+        .componentStats {
+            font-size: 0.7em;
+            color: #aaa;
+            line-height: 1.2;
+        }
+
+        .component-rarity {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .rarity-common { background: #9e9e9e; }
+        .rarity-uncommon { background: #4caf50; }
+        .rarity-rare { background: #2196f3; }
+        .rarity-epic { background: #9c27b0; }
+        .rarity-legendary { background: #ff9800; }
+
+        /* Enhanced Build Area */
+        #buildArea {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #1e1e30;
+            position: relative;
+        }
+
+        .build-toolbar {
+            background: linear-gradient(90deg, #0f3460, #16213e);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border-bottom: 2px solid #e94560;
+        }
+
+        .tool-group {
+            display: flex;
+            gap: 5px;
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+            padding-right: 15px;
+        }
+
+        .tool-btn {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            cursor: pointer;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+        }
+
+        .tool-btn:hover {
+            background: rgba(233, 69, 96, 0.3);
+            border-color: #e94560;
+        }
+
+        .tool-btn.active {
+            background: #e94560;
+            border-color: #e94560;
+            box-shadow: 0 0 15px rgba(233, 69, 96, 0.5);
+        }
+
+        #gridCanvas {
+            flex: 1;
+            background: 
+                radial-gradient(circle at 20px 20px, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                radial-gradient(circle at 40px 40px, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(135deg, #2a2a3e, #1e1e30);
+            background-size: 20px 20px, 40px 40px, 100% 100%;
+            position: relative;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                repeating-linear-gradient(0deg, 
+                    rgba(233, 69, 96, 0.1) 0px, 
+                    transparent 1px, 
+                    transparent 30px, 
+                    rgba(233, 69, 96, 0.1) 31px),
+                repeating-linear-gradient(90deg, 
+                    rgba(233, 69, 96, 0.1) 0px, 
+                    transparent 1px, 
+                    transparent 30px, 
+                    rgba(233, 69, 96, 0.1) 31px);
+            pointer-events: none;
+        }
+
+        /* Enhanced Stats Panel */
+        #statsPanel {
+            background: linear-gradient(90deg, #0f3460, #16213e);
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            border-top: 2px solid #e94560;
+            gap: 20px;
+        }
+
+        .statCard {
+            flex: 1;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .statCard:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .statIcon {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+
+        .statLabel {
+            font-size: 0.8em;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .statValue {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #e94560;
+            margin-bottom: 8px;
+        }
+
+        .statBar {
+            width: 100%;
+            height: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .statBarFill {
+            height: 100%;
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            transition: width 0.5s ease;
+            position: relative;
+        }
+
+        .statBarFill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        /* Enhanced Controls */
+        #controls {
+            background: linear-gradient(135deg, #0f3460, #e94560);
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #e94560, #ff6b6b);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1em;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+            min-width: 120px;
+        }
+
+        .button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.6s ease;
+        }
+
+        .button:hover::before {
+            left: 100%;
+        }
+
+        .button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(233, 69, 96, 0.6);
+        }
+
+        .button:active {
+            transform: translateY(-1px);
+        }
+
+        .button:disabled {
+            background: linear-gradient(135deg, #444, #666);
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .button.secondary {
+            background: linear-gradient(135deg, #16213e, #0f3460);
+            border: 2px solid #e94560;
+        }
+
+        /* Battle Mode Enhancements */
+        #battleMode {
+            display: none;
+            width: 100%;
+            height: 100%;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .arena-selector {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #e94560;
+        }
+
+        .arena-option {
+            display: block;
+            margin: 5px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .arena-option:hover {
+            background: rgba(233, 69, 96, 0.3);
+        }
+
+        #battleCanvas {
+            flex: 1;
+            background: #1e1e30;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Enhanced Battle UI */
+        #battleUI {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .battle-hud {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        .bot-info {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .bot-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+        }
+
+        .health-container {
+            position: relative;
+        }
+
+        .healthBar {
+            width: 300px;
+            height: 25px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #fff;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .healthBarFill {
+            height: 100%;
+            transition: width 0.5s ease;
+            position: relative;
+        }
+
+        .health-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: bold;
+            font-size: 0.9em;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+            z-index: 1;
+        }
+
+        #playerHealthFill {
+            background: linear-gradient(90deg, #4caf50, #8bc34a);
+        }
+
+        #enemyHealthFill {
+            background: linear-gradient(90deg, #f44336, #ff5722);
+        }
+
+        .battle-timer {
+            text-align: center;
+            font-size: 2em;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(233, 69, 96, 0.8);
+        }
+
+        /* Tournament Mode */
+        #tournamentMode {
+            display: none;
+            padding: 40px;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            overflow-y: auto;
+        }
+
+        .tournament-bracket {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 50px;
+            margin: 40px 0;
+        }
+
+        .bracket-round {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        .bracket-match {
+            background: rgba(0, 0, 0, 0.3);
+            border: 2px solid #e94560;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            min-width: 200px;
+        }
+
+        .match-bots {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .match-bot {
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        .match-bot.winner {
+            background: linear-gradient(135deg, #4caf50, #8bc34a);
+        }
+
+        /* Achievement System */
+        .achievement-popup {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: linear-gradient(135deg, #e94560, #ff6b6b);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #fff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            transform: translateX(400px);
+            transition: transform 0.5s ease;
+            z-index: 1000;
+            max-width: 300px;
+        }
+
+        .achievement-popup.show {
+            transform: translateX(0);
+        }
+
+        .achievement-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .achievement-desc {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        /* Enhanced Effects */
+        .placed-component {
+            position: absolute;
+            cursor: move;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .placed-component:hover {
+            border-color: #e94560;
+            z-index: 10;
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(233, 69, 96, 0.5);
+        }
+
+        .placed-component.selected {
+            border-color: #ff6b6b;
+            box-shadow: 0 0 25px rgba(255, 107, 107, 0.8);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 25px rgba(255, 107, 107, 0.8); }
+            50% { box-shadow: 0 0 35px rgba(255, 107, 107, 1); }
+        }
+
+        .connection-line {
+            position: absolute;
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            height: 3px;
+            border-radius: 2px;
+            pointer-events: none;
+            opacity: 0.7;
+            animation: energyFlow 2s linear infinite;
+        }
+
+        @keyframes energyFlow {
+            0% { box-shadow: 0 0 5px #e94560; }
+            50% { box-shadow: 0 0 15px #ff6b6b; }
+            100% { box-shadow: 0 0 5px #e94560; }
+        }
+
+        /* Sound Controls */
+        .sound-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid #e94560;
+        }
+
+        .sound-btn {
+            width: 40px;
+            height: 40px;
+            background: transparent;
+            border: 1px solid #e94560;
+            color: #e94560;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+        }
+
+        .sound-btn:hover {
+            background: #e94560;
+            color: #fff;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            #componentPalette {
+                width: 100%;
+                position: absolute;
+                top: 0;
+                left: -100%;
+                z-index: 20;
+                transition: left 0.3s ease;
+            }
+
+            #componentPalette.show {
+                left: 0;
+            }
+
+            .build-toolbar {
+                padding: 10px;
+                flex-wrap: wrap;
+            }
+
+            .tool-group {
+                border-right: none;
+                padding-right: 0;
+                margin-bottom: 10px;
+            }
+
+            #statsPanel {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .statCard {
+                padding: 10px;
+            }
+
+            #controls {
+                padding: 15px;
+                gap: 10px;
+            }
+
+            .button {
+                min-width: 100px;
+                padding: 10px 20px;
+                font-size: 0.9em;
+            }
+
+            .healthBar {
+                width: 200px;
+                height: 20px;
+            }
+        }
+
+        /* Loading and Transition Effects */
+        #loadingScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 9999;
+        }
+
+        .loader {
+            width: 80px;
+            height: 80px;
+            border: 6px solid #16213e;
+            border-top-color: #e94560;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 30px;
+        }
+
+        .loading-text {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        .loading-progress {
+            width: 300px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            border-radius: 2px;
+            animation: loading 3s ease-in-out;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 10px #e94560; }
+            to { text-shadow: 0 0 20px #ff6b6b; }
+        }
+
+        @keyframes loading {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        /* Particle Effects */
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .spark {
+            background: #ffeb3b;
+            animation: sparkFade 0.8s ease-out forwards;
+        }
+
+        .explosion-particle {
+            animation: explode 1.2s ease-out forwards;
+        }
+
+        @keyframes sparkFade {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(0) translate(var(--dx), var(--dy));
+                opacity: 0;
+            }
+        }
+
+        @keyframes explode {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(2) translate(var(--dx), var(--dy));
+                opacity: 0;
+            }
+        }
+
+        /* Game Over Screen */
+        #gameOverlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 100;
+        }
+
+        #gameResult {
+            font-size: 4em;
+            font-weight: 900;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            animation: resultGlow 2s ease-in-out infinite alternate;
+        }
+
+        .victory {
+            color: #4caf50;
+            text-shadow: 0 0 50px rgba(76, 175, 80, 0.8);
+        }
+
+        .defeat {
+            color: #f44336;
+            text-shadow: 0 0 50px rgba(244, 67, 54, 0.8);
+        }
+
+        @keyframes resultGlow {
+            from { transform: scale(1); }
+            to { transform: scale(1.05); }
+        }
+
+        .battle-stats {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 30px;
+            border-radius: 15px;
+            border: 2px solid #e94560;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <div id="loadingScreen">
+        <div class="loader"></div>
+        <div class="loading-text">Initializing BattleBots Arena</div>
+        <div class="loading-progress">
+            <div class="progress-bar"></div>
+        </div>
+    </div>
+
+    <div id="gameContainer">
+        <div id="header">
+            <div class="header-left">
+                <h1>âš¡ BattleBots Arena</h1>
+                <div class="level-indicator">
+                    Level <span id="playerLevel">1</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="xp-bar">
+                    <div class="xp-fill" id="xpFill" style="width: 0%"></div>
+                </div>
+                <span id="xpText">0 / 100 XP</span>
+            </div>
+        </div>
+
+        <div id="modeContainer">
+            <!-- Enhanced Builder Mode -->
+            <div id="builderMode">
+                <div id="componentPalette">
+                    <div class="palette-header">
+                        <div class="palette-tabs">
+                            <button class="palette-tab active" data-tab="all">All</button>
+                            <button class="palette-tab" data-tab="core">Core</button>
+                            <button class="palette-tab" data-tab="weapons">Weapons</button>
+                            <button class="palette-tab" data-tab="movement">Move</button>
+                        </div>
+                        <input type="text" class="search-box" placeholder="Search components..." id="componentSearch">
+                    </div>
+                    <div class="palette-content" id="paletteContent">
+                        <!-- Components will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <div id="buildArea">
+                    <div class="build-toolbar">
+                        <div class="tool-group">
+                            <button class="tool-btn active" data-tool="select" title="Select (S)">ðŸ–±ï¸</button>
+                            <button class="tool-btn" data-tool="rotate" title="Rotate (R)">ðŸ”„</button>
+                            <button class="tool-btn" data-tool="copy" title="Copy (C)">ðŸ“‹</button>
+                            <button class="tool-btn" data-tool="delete" title="Delete (Del)">ðŸ—‘ï¸</button>
+                        </div>
+                        <div class="tool-group">
+                            <button class="tool-btn" data-tool="undo" title="Undo (Ctrl+Z)">â†¶</button>
+                            <button class="tool-btn" data-tool="redo" title="Redo (Ctrl+Y)">â†·</button>
+                        </div>
+                        <div class="tool-group">
+                            <button class="tool-btn" data-tool="grid" title="Toggle Grid (G)">âŠž</button>
+                            <button class="tool-btn" data-tool="snap" title="Snap to Grid">ðŸ§²</button>
+                        </div>
+                        <div class="tool-group">
+                            <button class="tool-btn" data-tool="test" title="Test Bot Physics">ðŸ§ª</button>
+                        </div>
+                    </div>
+
+                    <div id="gridCanvas">
+                        <div class="grid-overlay"></div>
+                    </div>
+
+                    <div id="statsPanel">
+                        <div class="statCard">
+                            <div class="statIcon">âš–ï¸</div>
+                            <div class="statLabel">Weight</div>
+                            <div class="statValue" id="weightStat">0 / 150</div>
+                            <div class="statBar">
+                                <div class="statBarFill" id="weightBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="statCard">
+                            <div class="statIcon">âš¡</div>
+                            <div class="statLabel">Power</div>
+                            <div class="statValue" id="powerStat">0 / 0</div>
+                            <div class="statBar">
+                                <div class="statBarFill" id="powerBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="statCard">
+                            <div class="statIcon">ðŸ› ï¸</div>
+                            <div class="statLabel">Components</div>
+                            <div class="statValue" id="componentStat">0</div>
+                        </div>
+                        <div class="statCard">
+                            <div class="statIcon">âš”ï¸</div>
+                            <div class="statLabel">Combat Rating</div>
+                            <div class="statValue" id="combatStat">0</div>
+                        </div>
+                    </div>
+
+                    <div id="controls">
+                        <button class="button secondary" id="templateBtn">ðŸ“‹ Templates</button>
+                        <button class="button secondary" id="clearBtn">ðŸ—‘ï¸ Clear</button>
+                        <button class="button secondary" id="saveBtn">ðŸ’¾ Save</button>
+                        <button class="button secondary" id="loadBtn">ðŸ“‚ Load</button>
+                        <button class="button" id="battleBtn" disabled>âš”ï¸ Quick Battle</button>
+                        <button class="button" id="tournamentBtn" disabled>ðŸ† Tournament</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Enhanced Battle Mode -->
+            <div id="battleMode">
+                <div class="arena-selector">
+                    <h3>Select Arena</h3>
+                    <button class="arena-option" data-arena="classic">ðŸ›ï¸ Classic Arena</button>
+                    <button class="arena-option" data-arena="hazard">âš¡ Hazard Zone</button>
+                    <button class="arena-option" data-arena="pit">ðŸ•³ï¸ Pit Fighter</button>
+                    <button class="arena-option" data-arena="spinner">ðŸŒªï¸ Spinner Dome</button>
+                </div>
+
+                <div id="battleCanvas">
+                    <div id="battleUI">
+                        <div class="battle-hud">
+                            <div class="bot-info">
+                                <div class="bot-name">ðŸ¤– Your Bot</div>
+                                <div class="health-container">
+                                    <div class="healthBar">
+                                        <div class="healthBarFill" id="playerHealthFill" style="width: 100%"></div>
+                                        <div class="health-text" id="playerHealthText">100 / 100</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="battle-timer" id="battleTimer">3:00</div>
+                            
+                            <div class="bot-info">
+                                <div class="bot-name">ðŸ¦¾ AI Opponent</div>
+                                <div class="health-container">
+                                    <div class="healthBar">
+                                        <div class="healthBarFill" id="enemyHealthFill" style="width: 100%"></div>
+                                        <div class="health-text" id="enemyHealthText">100 / 100</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="position: absolute; bottom: 20px; left: 20px; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 10px;">
+                            <div><strong>Controls:</strong></div>
+                            <div>ðŸ”§ <kbd>W/A/S/D</kbd> - Movement</div>
+                            <div>âš”ï¸ <kbd>Space</kbd> - Primary Weapon</div>
+                            <div>ðŸ›¡ï¸ <kbd>Shift</kbd> - Secondary Weapon</div>
+                            <div>ðŸŽ¯ <kbd>Tab</kbd> - Target Lock</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="gameOverlay">
+                    <div id="gameResult"></div>
+                    <div class="battle-stats">
+                        <h3>Battle Statistics</h3>
+                        <div class="stat-row">
+                            <span>Damage Dealt:</span>
+                            <span id="damageDealt">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span>Hits Landed:</span>
+                            <span id="hitsLanded">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span>Battle Duration:</span>
+                            <span id="battleDuration">0:00</span>
+                        </div>
+                        <div class="stat-row">
+                            <span>XP Gained:</span>
+                            <span id="xpGained">+0</span>
+                        </div>
+                    </div>
+                    <div>
+                        <button class="button secondary" id="rematchBtn">ðŸ”„ Rematch</button>
+                        <button class="button" id="returnBtn">ðŸ  Workshop</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tournament Mode -->
+            <div id="tournamentMode">
+                <h2 style="text-align: center; margin-bottom: 30px; font-size: 2.5em;">ðŸ† Tournament Championship</h2>
+                
+                <div class="tournament-bracket">
+                    <div class="bracket-round">
+                        <h3>Quarterfinals</h3>
+                        <div class="bracket-match" data-match="qf1">
+                            <div class="match-bots">
+                                <div class="match-bot">Your Bot</div>
+                                <div class="match-bot">Crusher Bot</div>
+                            </div>
+                            <button class="button" onclick="startTournamentMatch('qf1')">Fight!</button>
+                        </div>
+                        <div class="bracket-match" data-match="qf2">
+                            <div class="match-bots">
+                                <div class="match-bot">Spinner Supreme</div>
+                                <div class="match-bot">Metal Mayhem</div>
+                            </div>
+                            <div>AI vs AI</div>
+                        </div>
+                    </div>
+                    
+                    <div class="bracket-round">
+                        <h3>Semifinals</h3>
+                        <div class="bracket-match" data-match="sf1">
+                            <div class="match-bots">
+                                <div class="match-bot">TBD</div>
+                                <div class="match-bot">TBD</div>
+                            </div>
+                            <div>Locked</div>
+                        </div>
+                    </div>
+                    
+                    <div class="bracket-round">
+                        <h3>Finals</h3>
+                        <div class="bracket-match" data-match="final">
+                            <div class="match-bots">
+                                <div class="match-bot">Champion</div>
+                                <div class="match-bot">Challenger</div>
+                            </div>
+                            <div>Locked</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 40px;">
+                    <button class="button secondary" onclick="showMode('builder')">ðŸ”§ Back to Workshop</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sound Controls -->
+    <div class="sound-controls">
+        <button class="sound-btn" id="soundToggle" title="Toggle Sound">ðŸ”Š</button>
+    </div>
+
+    <!-- Achievement Popup -->
+    <div class="achievement-popup" id="achievementPopup">
+        <div class="achievement-title" id="achievementTitle">Achievement Unlocked!</div>
+        <div class="achievement-desc" id="achievementDesc">First Victory</div>
+    </div>
+
+    <script type="module">
+        // Enhanced Database Schema
+        const db = new Dexie('BattleBotsArenaDB');
+        db.version(2).stores({
+            bots: '++id, name, components, dateCreated, wins, losses, rating',
+            achievements: '++id, name, description, unlocked, dateUnlocked',
+            settings: 'key, value',
+            tournaments: '++id, name, participants, winner, dateCompleted',
+            battleHistory: '++id, playerBot, enemyBot, result, duration, damageDealt, dateCompleted'
+        });
+
+        // Initialize default data
+        db.on('ready', async function() {
+            // Add default achievements
+            const achievementCount = await db.achievements.count();
+            if (achievementCount === 0) {
+                await db.achievements.bulkAdd([
+                    { name: 'First Bot', description: 'Build your first bot', unlocked: false },
+                    { name: 'First Victory', description: 'Win your first battle', unlocked: false },
+                    { name: 'Destroyer', description: 'Deal 1000 total damage', unlocked: false },
+                    { name: 'Champion', description: 'Win a tournament', unlocked: false },
+                    { name: 'Master Builder', description: 'Create 10 different bots', unlocked: false }
+                ]);
+            }
+
+            // Initialize settings
+            const settingsCount = await db.settings.count();
+            if (settingsCount === 0) {
+                await db.settings.bulkAdd([
+                    { key: 'playerLevel', value: 1 },
+                    { key: 'playerXP', value: 0 },
+                    { key: 'soundEnabled', value: true },
+                    { key: 'unlockedComponents', value: ['control_unit', 'wood_plank', 'small_wheel', 'electric_motor', 'small_battery'] }
+                ]);
+            }
+        });
+
+        window.db = db;
+
+        // Matter.js Setup
+        const Engine = Matter.Engine,
+              Render = Matter.Render,
+              World = Matter.World,
+              Bodies = Matter.Bodies,
+              Body = Matter.Body,
+              Composite = Matter.Composite,
+              Constraint = Matter.Constraint,
+              Events = Matter.Events,
+              Vector = Matter.Vector;
+
+        // Enhanced Game State
+        const gameState = {
+            mode: 'builder',
+            currentTool: 'select',
+            selectedComponent: null,
+            placedComponents: [],
+            componentHistory: [],
+            historyIndex: -1,
+            engine: null,
+            render: null,
+            playerBot: null,
+            aiBot: null,
+            battleActive: false,
+            battleTimer: 180, // 3 minutes
+            battleStats: {
+                damageDealt: 0,
+                hitsLanded: 0,
+                battleStartTime: 0
+            },
+            playerData: {
+                level: 1,
+                xp: 0,
+                unlockedComponents: []
+            },
+            currentArena: 'classic',
+            soundEnabled: true,
+            controls: {
+                forward: false,
+                backward: false,
+                left: false,
+                right: false,
+                weapon1: false,
+                weapon2: false,
+                targetLock: false
+            }
+        };
+
+        // Enhanced Component Definitions
+        const componentDefinitions = {
+            core: [
+                {
+                    id: 'control_unit',
+                    name: 'Control Unit',
+                    emoji: 'ðŸ§ ',
+                    type: 'core',
+                    mass: 8,
+                    durability: 100,
+                    powerCapacity: 150,
+                    powerDraw: 0,
+                    color: '#ff6b6b',
+                    width: 60,
+                    height: 60,
+                    required: true,
+                    maxCount: 1,
+                    rarity: 'common',
+                    unlockLevel: 1,
+                    description: 'The brain of your bot. Critical component!'
+                },
+                {
+                    id: 'advanced_cpu',
+                    name: 'Advanced CPU',
+                    emoji: 'ðŸ’Ž',
+                    type: 'core',
+                    mass: 6,
+                    durability: 80,
+                    powerCapacity: 200,
+                    powerDraw: 10,
+                    color: '#4fc3f7',
+                    width: 50,
+                    height: 50,
+                    required: true,
+                    maxCount: 1,
+                    rarity: 'rare',
+                    unlockLevel: 5,
+                    description: 'Higher capacity, faster processing'
+                }
+            ],
+            structure: [
+                {
+                    id: 'wood_plank',
+                    name: 'Wood Plank',
+                    emoji: 'ðŸªµ',
+                    type: 'structure',
+                    mass: 3,
+                    durability: 30,
+                    powerDraw: 0,
+                    color: '#8b4513',
+                    width: 80,
+                    height: 20,
+                    rarity: 'common',
+                    unlockLevel: 1,
+                    description: 'Light and cheap'
+                },
+                {
+                    id: 'steel_beam',
+                    name: 'Steel Beam',
+                    emoji: 'ðŸ—ï¸',
+                    type: 'structure',
+                    mass: 12,
+                    durability: 120,
+                    powerDraw: 0,
+                    color: '#708090',
+                    width: 80,
+                    height: 25,
+                    rarity: 'uncommon',
+                    unlockLevel: 2,
+                    description: 'Heavy but incredibly durable'
+                },
+                {
+                    id: 'titanium_frame',
+                    name: 'Titanium Frame',
+                    emoji: 'âš¡',
+                    type: 'structure',
+                    mass: 8,
+                    durability: 100,
+                    powerDraw: 0,
+                    color: '#c0c0c0',
+                    width: 60,
+                    height: 60,
+                    isFrame: true,
+                    rarity: 'epic',
+                    unlockLevel: 7,
+                    description: 'Lightweight and super strong'
+                }
+            ],
+            movement: [
+                {
+                    id: 'small_wheel',
+                    name: 'Small Wheel',
+                    emoji: 'âšª',
+                    type: 'wheel',
+                    mass: 4,
+                    durability: 40,
+                    powerDraw: 0,
+                    color: '#2f4f4f',
+                    radius: 20,
+                    torque: 0.12,
+                    maxSpeed: 15,
+                    rarity: 'common',
+                    unlockLevel: 1,
+                    description: 'Basic mobility'
+                },
+                {
+                    id: 'racing_wheel',
+                    name: 'Racing Wheel',
+                    emoji: 'ðŸŽï¸',
+                    type: 'wheel',
+                    mass: 5,
+                    durability: 35,
+                    powerDraw: 5,
+                    color: '#ff4500',
+                    radius: 25,
+                    torque: 0.18,
+                    maxSpeed: 25,
+                    rarity: 'uncommon',
+                    unlockLevel: 3,
+                    description: 'High speed, moderate durability'
+                },
+                {
+                    id: 'tank_track',
+                    name: 'Tank Track',
+                    emoji: 'ðŸ›¤ï¸',
+                    type: 'wheel',
+                    mass: 15,
+                    durability: 80,
+                    powerDraw: 15,
+                    color: '#556b2f',
+                    radius: 30,
+                    torque: 0.25,
+                    maxSpeed: 12,
+                    rarity: 'rare',
+                    unlockLevel: 6,
+                    description: 'Maximum traction and durability'
+                },
+                {
+                    id: 'electric_motor',
+                    name: 'Electric Motor',
+                    emoji: 'âš™ï¸',
+                    type: 'motor',
+                    mass: 6,
+                    durability: 50,
+                    powerDraw: 25,
+                    color: '#ffd700',
+                    width: 35,
+                    height: 35,
+                    torqueMultiplier: 1.8,
+                    rarity: 'common',
+                    unlockLevel: 1,
+                    description: 'Powers wheels and weapons'
+                },
+                {
+                    id: 'turbo_motor',
+                    name: 'Turbo Motor',
+                    emoji: 'ðŸš€',
+                    type: 'motor',
+                    mass: 8,
+                    durability: 60,
+                    powerDraw: 40,
+                    color: '#ff6347',
+                    width: 40,
+                    height: 40,
+                    torqueMultiplier: 2.5,
+                    rarity: 'rare',
+                    unlockLevel: 4,
+                    description: 'High performance motor'
+                }
+            ],
+            power: [
+                {
+                    id: 'small_battery',
+                    name: 'Small Battery',
+                    emoji: 'ðŸ”‹',
+                    type: 'battery',
+                    mass: 6,
+                    durability: 30,
+                    powerCapacity: 80,
+                    powerDraw: 0,
+                    color: '#32cd32',
+                    width: 40,
+                    height: 40,
+                    rarity: 'common',
+                    unlockLevel: 1,
+                    description: '+80 power capacity'
+                },
+                {
+                    id: 'power_cell',
+                    name: 'Power Cell',
+                    emoji: 'âš¡',
+                    type: 'battery',
+                    mass: 10,
+                    durability: 40,
+                    powerCapacity: 150,
+                    powerDraw: 0,
+                    color: '#1e90ff',
+                    width: 50,
+                    height: 45,
+                    rarity: 'uncommon',
+                    unlockLevel: 3,
+                    description: '+150 power capacity'
+                },
+                {
+                    id: 'fusion_core',
+                    name: 'Fusion Core',
+                    emoji: 'ðŸ’«',
+                    type: 'battery',
+                    mass: 8,
+                    durability: 60,
+                    powerCapacity: 300,
+                    powerDraw: 0,
+                    color: '#ff00ff',
+                    width: 45,
+                    height: 45,
+                    rarity: 'legendary',
+                    unlockLevel: 10,
+                    description: '+300 power, lightweight'
+                }
+            ],
+            weapons: [
+                {
+                    id: 'drill_spike',
+                    name: 'Drill Spike',
+                    emoji: 'ðŸ—¡ï¸',
+                    type: 'weapon',
+                    mass: 8,
+                    durability: 60,
+                    powerDraw: 30,
+                    damage: 8,
+                    color: '#dc143c',
+                    width: 50,
+                    height: 20,
+                    weaponType: 'melee',
+                    attackRate: 3,
+                    rarity: 'common',
+                    unlockLevel: 2,
+                    description: 'Continuous contact damage'
+                },
+                {
+                    id: 'spinner_blade',
+                    name: 'Spinner Blade',
+                    emoji: 'ðŸŒªï¸',
+                    type: 'weapon',
+                    mass: 15,
+                    durability: 80,
+                    powerDraw: 60,
+                    damage: 25,
+                    color: '#8b0000',
+                    radius: 45,
+                    weaponType: 'spinner',
+                    attackRate: 1,
+                    requiresMotor: true,
+                    rarity: 'rare',
+                    unlockLevel: 4,
+                    description: 'High damage spinning weapon'
+                },
+                {
+                    id: 'hammer_arm',
+                    name: 'Hammer Arm',
+                    emoji: 'ðŸ”¨',
+                    type: 'weapon',
+                    mass: 12,
+                    durability: 70,
+                    powerDraw: 45,
+                    damage: 30,
+                    color: '#ff4500',
+                    width: 70,
+                    height: 25,
+                    weaponType: 'hammer',
+                    attackRate: 0.5,
+                    requiresServo: true,
+                    rarity: 'uncommon',
+                    unlockLevel: 3,
+                    description: 'Devastating swing attack'
+                },
+                {
+                    id: 'plasma_cannon',
+                    name: 'Plasma Cannon',
+                    emoji: 'âš¡',
+                    type: 'weapon',
+                    mass: 20,
+                    durability: 50,
+                    powerDraw: 80,
+                    damage: 40,
+                    color: '#00ffff',
+                    width: 60,
+                    height: 30,
+                    weaponType: 'ranged',
+                    attackRate: 0.3,
+                    range: 200,
+                    rarity: 'legendary',
+                    unlockLevel: 9,
+                    description: 'Devastating ranged weapon'
+                },
+                {
+                    id: 'flipper_panel',
+                    name: 'Flipper Panel',
+                    emoji: 'ðŸ“‹',
+                    type: 'weapon',
+                    mass: 10,
+                    durability: 50,
+                    powerDraw: 40,
+                    force: 80,
+                    color: '#ff8c00',
+                    width: 90,
+                    height: 20,
+                    weaponType: 'flipper',
+                    attackRate: 0.8,
+                    requiresServo: true,
+                    rarity: 'uncommon',
+                    unlockLevel: 2,
+                    description: 'Launches opponents skyward'
+                }
+            ],
+            utility: [
+                {
+                    id: 'servo',
+                    name: 'Servo Motor',
+                    emoji: 'ðŸ”§',
+                    type: 'servo',
+                    mass: 4,
+                    durability: 40,
+                    powerDraw: 20,
+                    color: '#9370db',
+                    width: 30,
+                    height: 30,
+                    rarity: 'common',
+                    unlockLevel: 2,
+                    description: 'Enables weapon actuation'
+                },
+                {
+                    id: 'armor_plating',
+                    name: 'Armor Plating',
+                    emoji: 'ðŸ›¡ï¸',
+                    type: 'armor',
+                    mass: 18,
+                    durability: 150,
+                    powerDraw: 0,
+                    damageReduction: 0.3,
+                    color: '#696969',
+                    width: 60,
+                    height: 60,
+                    rarity: 'uncommon',
+                    unlockLevel: 3,
+                    description: 'Reduces incoming damage by 30%'
+                },
+                {
+                    id: 'reactive_armor',
+                    name: 'Reactive Armor',
+                    emoji: 'ðŸ’¥',
+                    type: 'armor',
+                    mass: 15,
+                    durability: 120,
+                    powerDraw: 15,
+                    damageReduction: 0.4,
+                    explosiveResistance: true,
+                    color: '#4169e1',
+                    width: 55,
+                    height: 55,
+                    rarity: 'epic',
+                    unlockLevel: 8,
+                    description: 'Advanced protection with explosive resistance'
+                },
+                {
+                    id: 'gyroscope',
+                    name: 'Gyroscope',
+                    emoji: 'ðŸŒ€',
+                    type: 'utility',
+                    mass: 5,
+                    durability: 35,
+                    powerDraw: 10,
+                    stabilization: 0.5,
+                    color: '#20b2aa',
+                    width: 35,
+                    height: 35,
+                    rarity: 'rare',
+                    unlockLevel: 5,
+                    description: 'Improves stability and control'
+                }
+            ]
+        };
+
+        // Audio System
+        class AudioManager {
+            constructor() {
+                this.sounds = {};
+                this.enabled = true;
+                this.loadSounds();
+            }
+
+            loadSounds() {
+                // Using Web Audio API to generate synthetic sounds
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Generate sound effects
+                this.generateSounds();
+            }
+
+            generateSounds() {
+                this.sounds = {
+                    click: () => this.playTone(800, 0.1, 'sine'),
+                    place: () => this.playTone(600, 0.15, 'square'),
+                    battle: () => this.playTone(200, 0.3, 'sawtooth'),
+                    hit: () => this.playNoise(0.1),
+                    explosion: () => this.playExplosion(),
+                    victory: () => this.playMelody([523, 659, 784, 1047], 0.5),
+                    defeat: () => this.playMelody([400, 350, 300, 250], 0.8)
+                };
+            }
+
+            playTone(frequency, duration, type = 'sine') {
+                if (!this.enabled) return;
+                
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                oscillator.frequency.value = frequency;
+                oscillator.type = type;
+                
+                gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+                
+                oscillator.start(this.audioContext.currentTime);
+                oscillator.stop(this.audioContext.currentTime + duration);
+            }
+
+            playNoise(duration) {
+                if (!this.enabled) return;
+                
+                const bufferSize = this.audioContext.sampleRate * duration;
+                const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+                const output = buffer.getChannelData(0);
+                
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+                
+                const source = this.audioContext.createBufferSource();
+                const gainNode = this.audioContext.createGain();
+                
+                source.buffer = buffer;
+                source.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+                
+                source.start();
+            }
+
+            playExplosion() {
+                if (!this.enabled) return;
+                
+                // Create explosion sound with multiple frequency components
+                for (let i = 0; i < 5; i++) {
+                    setTimeout(() => {
+                        this.playTone(Math.random() * 200 + 50, 0.2, 'sawtooth');
+                        this.playNoise(0.15);
+                    }, i * 50);
+                }
+            }
+
+            playMelody(frequencies, noteDuration) {
+                if (!this.enabled) return;
+                
+                frequencies.forEach((freq, index) => {
+                    setTimeout(() => {
+                        this.playTone(freq, noteDuration);
+                    }, index * noteDuration * 1000);
+                });
+            }
+
+            play(soundName) {
+                if (this.sounds[soundName]) {
+                    this.sounds[soundName]();
+                }
+            }
+
+            toggle() {
+                this.enabled = !this.enabled;
+                return this.enabled;
+            }
+        }
+
+        // Initialize Audio Manager
+        const audioManager = new AudioManager();
+
+        // Achievement System
+        class AchievementSystem {
+            constructor() {
+                this.checkInterval = 1000; // Check every second
+                this.startChecking();
+            }
+
+            async checkAchievements() {
+                const achievements = await db.achievements.where('unlocked').equals(false).toArray();
+                
+                for (const achievement of achievements) {
+                    if (await this.checkCondition(achievement)) {
+                        await this.unlockAchievement(achievement);
+                    }
+                }
+            }
+
+            async checkCondition(achievement) {
+                switch (achievement.name) {
+                    case 'First Bot':
+                        return gameState.placedComponents.length > 0;
+                    
+                    case 'First Victory':
+                        const battles = await db.battleHistory.where('result').equals('victory').count();
+                        return battles > 0;
+                    
+                    case 'Destroyer':
+                        const totalDamage = await db.battleHistory.toArray()
+                            .then(battles => battles.reduce((sum, battle) => sum + (battle.damageDealt || 0), 0));
+                        return totalDamage >= 1000;
+                    
+                    case 'Master Builder':
+                        const botCount = await db.bots.count();
+                        return botCount >= 10;
+                    
+                    default:
+                        return false;
+                }
+            }
+
+            async unlockAchievement(achievement) {
+                await db.achievements.update(achievement.id, { 
+                    unlocked: true, 
+                    dateUnlocked: new Date() 
+                });
+                
+                this.showAchievement(achievement);
+                audioManager.play('victory');
+                
+                // Award XP
+                await this.awardXP(50);
+            }
+
+            showAchievement(achievement) {
+                const popup = document.getElementById('achievementPopup');
+                const title = document.getElementById('achievementTitle');
+                const desc = document.getElementById('achievementDesc');
+                
+                title.textContent = achievement.name;
+                desc.textContent = achievement.description;
+                
+                popup.classList.add('show');
+                
+                setTimeout(() => {
+                    popup.classList.remove('show');
+                }, 3000);
+            }
+
+            async awardXP(amount) {
+                const currentXP = await db.settings.get('playerXP').then(s => s?.value || 0);
+                const currentLevel = await db.settings.get('playerLevel').then(s => s?.value || 1);
+                
+                const newXP = currentXP + amount;
+                const xpForNextLevel = currentLevel * 100;
+                
+                if (newXP >= xpForNextLevel) {
+                    // Level up!
+                    const newLevel = currentLevel + 1;
+                    await db.settings.put({ key: 'playerLevel', value: newLevel });
+                    await db.settings.put({ key: 'playerXP', value: newXP - xpForNextLevel });
+                    
+                    this.showLevelUp(newLevel);
+                    await this.unlockNewComponents(newLevel);
+                } else {
+                    await db.settings.put({ key: 'playerXP', value: newXP });
+                }
+                
+                this.updateXPDisplay();
+            }
+
+            showLevelUp(level) {
+                // Create level up effect
+                const popup = document.getElementById('achievementPopup');
+                const title = document.getElementById('achievementTitle');
+                const desc = document.getElementById('achievementDesc');
+                
+                title.textContent = 'LEVEL UP!';
+                desc.textContent = `Reached Level ${level}`;
+                
+                popup.style.background = 'linear-gradient(135deg, #4caf50, #8bc34a)';
+                popup.classList.add('show');
+                
+                setTimeout(() => {
+                    popup.classList.remove('show');
+                    popup.style.background = 'linear-gradient(135deg, #e94560, #ff6b6b)';
+                }, 4000);
+            }
+
+            async unlockNewComponents(level) {
+                const unlocked = await db.settings.get('unlockedComponents').then(s => s?.value || []);
+                let newUnlocks = [];
+                
+                for (const category of Object.values(componentDefinitions)) {
+                    for (const component of category) {
+                        if (component.unlockLevel === level && !unlocked.includes(component.id)) {
+                            newUnlocks.push(component.id);
+                        }
+                    }
+                }
+                
+                if (newUnlocks.length > 0) {
+                    await db.settings.put({ 
+                        key: 'unlockedComponents', 
+                        value: [...unlocked, ...newUnlocks] 
+                    });
+                    
+                    // Show unlock notification
+                    setTimeout(() => {
+                        this.showAchievement({
+                            name: 'New Components Unlocked!',
+                            description: `Unlocked ${newUnlocks.length} new components`
+                        });
+                    }, 1000);
+                }
+            }
+
+            async updateXPDisplay() {
+                const xp = await db.settings.get('playerXP').then(s => s?.value || 0);
+                const level = await db.settings.get('playerLevel').then(s => s?.value || 1);
+                const xpForNext = level * 100;
+                
+                document.getElementById('playerLevel').textContent = level;
+                document.getElementById('xpText').textContent = `${xp} / ${xpForNext} XP`;
+                document.getElementById('xpFill').style.width = `${(xp / xpForNext) * 100}%`;
+                
+                gameState.playerData.level = level;
+                gameState.playerData.xp = xp;
+            }
+
+            startChecking() {
+                setInterval(() => this.checkAchievements(), this.checkInterval);
+            }
+        }
+
+        // Initialize Achievement System
+        const achievementSystem = new AchievementSystem();
+
+        // Enhanced Builder Mode
+        class EnhancedBuilderMode {
+            constructor() {
+                this.gridSize = 30;
+                this.maxWeight = 150;
+                this.snapToGrid = true;
+                this.showGrid = true;
+                this.selectedComponents = [];
+                this.clipboard = [];
+                this.connectionLines = [];
+                this.init();
+            }
+
+            async init() {
+                await this.loadPlayerData();
+                this.setupComponentPalette();
+                this.setupGridCanvas();
+                this.setupToolbar();
+                this.setupControls();
+                this.setupKeyboardShortcuts();
+                this.updateStats();
+                achievementSystem.updateXPDisplay();
+            }
+
+            async loadPlayerData() {
+                const unlockedComponents = await db.settings.get('unlockedComponents');
+                gameState.playerData.unlockedComponents = unlockedComponents?.value || [];
+            }
+
+            setupComponentPalette() {
+                this.updateComponentPalette('all');
+                
+                // Tab switching
+                document.querySelectorAll('.palette-tab').forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        document.querySelectorAll('.palette-tab').forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                        this.updateComponentPalette(tab.dataset.tab);
+                        audioManager.play('click');
+                    });
+                });
+
+                // Search functionality
+                document.getElementById('componentSearch').addEventListener('input', (e) => {
+                    this.filterComponents(e.target.value);
+                });
+            }
+
+            updateComponentPalette(category) {
+                const content = document.getElementById('paletteContent');
+                content.innerHTML = '';
+
+                const categoriesToShow = category === 'all' ? 
+                    Object.keys(componentDefinitions) : 
+                    [category === 'move' ? 'movement' : category];
+
+                for (const catKey of categoriesToShow) {
+                    if (!componentDefinitions[catKey]) continue;
+                    
+                    const categoryDiv = document.createElement('div');
+                    categoryDiv.className = 'componentCategory';
+                    
+                    const header = document.createElement('h3');
+                    header.innerHTML = `
+                        <div class="category-icon"></div>
+                        ${catKey.charAt(0).toUpperCase() + catKey.slice(1)}
+                    `;
+                    categoryDiv.appendChild(header);
+
+                    componentDefinitions[catKey].forEach(comp => {
+                        const isUnlocked = gameState.playerData.unlockedComponents.includes(comp.id);
+                        
+                        const componentDiv = document.createElement('div');
+                        componentDiv.className = `component ${!isUnlocked ? 'locked' : ''}`;
+                        componentDiv.draggable = isUnlocked;
+                        componentDiv.dataset.componentId = comp.id;
+
+                        const rarity = document.createElement('div');
+                        rarity.className = `component-rarity rarity-${comp.rarity}`;
+
+                        const icon = document.createElement('div');
+                        icon.className = 'componentIcon';
+                        icon.style.backgroundColor = comp.color;
+                        icon.textContent = comp.emoji || 'âšª';
+
+                        const info = document.createElement('div');
+                        info.className = 'componentInfo';
+                        info.innerHTML = `
+                            <div class="componentName">${comp.name}</div>
+                            <div class="componentStats">
+                                Mass: ${comp.mass} | HP: ${comp.durability}
+                                ${comp.powerDraw > 0 ? ` | -${comp.powerDraw}âš¡` : ''}
+                                ${comp.powerCapacity > 0 ? ` | +${comp.powerCapacity}âš¡` : ''}
+                                ${comp.damage ? ` | ${comp.damage}ðŸ’¥` : ''}
+                                ${!isUnlocked ? ` | Unlock Lv.${comp.unlockLevel}` : ''}
+                            </div>
+                        `;
+
+                        componentDiv.appendChild(rarity);
+                        componentDiv.appendChild(icon);
+                        componentDiv.appendChild(info);
+                        categoryDiv.appendChild(componentDiv);
+
+                        if (isUnlocked) {
+                            // Drag events
+                            componentDiv.addEventListener('dragstart', (e) => {
+                                e.dataTransfer.setData('componentId', comp.id);
+                                componentDiv.style.opacity = '0.5';
+                                audioManager.play('click');
+                            });
+
+                            componentDiv.addEventListener('dragend', () => {
+                                componentDiv.style.opacity = '1';
+                            });
+
+                            // Click to select for placement
+                            componentDiv.addEventListener('click', () => {
+                                this.selectComponentForPlacement(comp);
+                                audioManager.play('click');
+                            });
+                        }
+                    });
+
+                    content.appendChild(categoryDiv);
+                }
+            }
+
+            filterComponents(searchTerm) {
+                const components = document.querySelectorAll('.component');
+                const term = searchTerm.toLowerCase();
+                
+                components.forEach(comp => {
+                    const name = comp.querySelector('.componentName').textContent.toLowerCase();
+                    const isVisible = name.includes(term);
+                    comp.style.display = isVisible ? 'flex' : 'none';
+                });
+            }
+
+            selectComponentForPlacement(component) {
+                this.selectedForPlacement = component;
+                document.getElementById('gridCanvas').style.cursor = 'crosshair';
+                
+                // Highlight selected component
+                document.querySelectorAll('.component').forEach(c => c.classList.remove('selected'));
+                document.querySelector(`[data-component-id="${component.id}"]`).classList.add('selected');
+            }
+
+            setupGridCanvas() {
+                const canvas = document.getElementById('gridCanvas');
+                
+                canvas.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+
+                canvas.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const componentId = e.dataTransfer.getData('componentId');
+                    if (componentId) {
+                        const rect = canvas.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const y = e.clientY - rect.top;
+                        this.placeComponent(componentId, x, y);
+                    }
+                });
+
+                canvas.addEventListener('click', (e) => {
+                    if (this.selectedForPlacement) {
+                        const rect = canvas.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const y = e.clientY - rect.top;
+                        this.placeComponent(this.selectedForPlacement.id, x, y);
+                    } else if (e.target === canvas || e.target.className === 'grid-overlay') {
+                        this.deselectAll();
+                    }
+                });
+
+                // Right-click context menu
+                canvas.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    // Could add context menu here
+                });
+            }
+
+            setupToolbar() {
+                document.querySelectorAll('.tool-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const tool = btn.dataset.tool;
+                        this.selectTool(tool);
+                        audioManager.play('click');
+                    });
+                });
+            }
+
+            selectTool(tool) {
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                document.querySelector(`[data-tool="${tool}"]`).classList.add('active');
+                
+                gameState.currentTool = tool;
+                
+                switch(tool) {
+                    case 'select':
+                        document.getElementById('gridCanvas').style.cursor = 'default';
+                        break;
+                    case 'rotate':
+                        this.rotateSelected();
+                        break;
+                    case 'copy':
+                        this.copySelected();
+                        break;
+                    case 'delete':
+                        this.deleteSelected();
+                        break;
+                    case 'undo':
+                        this.undo();
+                        break;
+                    case 'redo':
+                        this.redo();
+                        break;
+                    case 'grid':
+                        this.toggleGrid();
+                        break;
+                    case 'snap':
+                        this.toggleSnap();
+                        break;
+                    case 'test':
+                        this.testBotPhysics();
+                        break;
+                }
+                
+                // Reset tool to select after action
+                if (['rotate', 'copy', 'delete', 'undo', 'redo', 'grid', 'snap', 'test'].includes(tool)) {
+                    setTimeout(() => this.selectTool('select'), 100);
+                }
+            }
+
+            setupKeyboardShortcuts() {
+                document.addEventListener('keydown', (e) => {
+                    if (e.target.tagName === 'INPUT') return;
+                    
+                    switch(e.key.toLowerCase()) {
+                        case 's':
+                            if (!e.ctrlKey) this.selectTool('select');
+                            break;
+                        case 'r':
+                            this.selectTool('rotate');
+                            break;
+                        case 'c':
+                            if (e.ctrlKey) this.selectTool('copy');
+                            break;
+                        case 'delete':
+                        case 'backspace':
+                            this.selectTool('delete');
+                            break;
+                        case 'z':
+                            if (e.ctrlKey) this.selectTool('undo');
+                            break;
+                        case 'y':
+                            if (e.ctrlKey) this.selectTool('redo');
+                            break;
+                        case 'g':
+                            this.selectTool('grid');
+                            break;
+                        case 'escape':
+                            this.deselectAll();
+                            this.selectedForPlacement = null;
+                            document.getElementById('gridCanvas').style.cursor = 'default';
+                            break;
+                    }
+                });
+            }
+
+            placeComponent(componentId, x, y) {
+                const component = this.findComponentDefinition(componentId);
+                if (!component) return;
+
+                // Check if component is unlocked
+                if (!gameState.playerData.unlockedComponents.includes(componentId)) {
+                    this.showMessage('Component not unlocked yet!', 'error');
+                    return;
+                }
+
+                // Check constraints
+                if (component.required && !this.hasControlUnit() && component.id !== 'control_unit') {
+                    this.showMessage('You must place a Control Unit first!', 'warning');
+                    return;
+                }
+
+                if (component.maxCount) {
+                    const count = gameState.placedComponents.filter(c => c.id === componentId).length;
+                    if (count >= component.maxCount) {
+                        this.showMessage(`You can only place ${component.maxCount} ${component.name}(s)!`, 'warning');
+                        return;
+                    }
+                }
+
+                // Check weight limit
+                const currentWeight = this.calculateTotalWeight();
+                if (currentWeight + component.mass > this.maxWeight) {
+                    this.showMessage('Weight limit exceeded!', 'error');
+                    return;
+                }
+
+                // Snap to grid if enabled
+                let finalX = x, finalY = y;
+                if (this.snapToGrid) {
+                    finalX = Math.round(x / this.gridSize) * this.gridSize;
+                    finalY = Math.round(y / this.gridSize) * this.gridSize;
+                }
+
+                // Create placed component
+                const placedComponent = {
+                    ...component,
+                    x: finalX,
+                    y: finalY,
+                    uid: Date.now() + Math.random(),
+                    rotation: 0,
+                    connections: []
+                };
+
+                // Save state for undo
+                this.saveState();
+
+                gameState.placedComponents.push(placedComponent);
+                this.renderComponent(placedComponent);
+                this.updateStats();
+                this.checkBattleReady();
+                this.updateConnectionLines();
+                
+                audioManager.play('place');
+                
+                // Clear selection for placement
+                this.selectedForPlacement = null;
+                document.getElementById('gridCanvas').style.cursor = 'default';
+                document.querySelectorAll('.component').forEach(c => c.classList.remove('selected'));
+            }
+
+            renderComponent(component) {
+                const canvas = document.getElementById('gridCanvas');
+                const div = document.createElement('div');
+                div.className = 'placed-component';
+                div.dataset.uid = component.uid;
+                div.style.left = (component.x - (component.width || component.radius * 2) / 2) + 'px';
+                div.style.top = (component.y - (component.height || component.radius * 2) / 2) + 'px';
+                div.style.width = (component.width || component.radius * 2) + 'px';
+                div.style.height = (component.height || component.radius * 2) + 'px';
+                div.style.backgroundColor = component.color;
+                div.style.transform = `rotate(${component.rotation || 0}deg)`;
+                div.textContent = component.emoji || '';
+                
+                if (component.radius) {
+                    div.style.borderRadius = '50%';
+                }
+
+                // Event listeners
+                div.addEventListener('mousedown', (e) => this.startDrag(e, component, div));
+                div.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.selectComponent(component, div);
+                });
+
+                div.addEventListener('dblclick', () => {
+                    this.removeComponent(component);
+                });
+
+                canvas.appendChild(div);
+            }
+
+            startDrag(e, component, div) {
+                if (gameState.currentTool !== 'select') return;
+                
+                e.preventDefault();
+                this.isDragging = true;
+                this.draggedComponent = component;
+                
+                const rect = div.getBoundingClientRect();
+                const canvas = document.getElementById('gridCanvas');
+                const canvasRect = canvas.getBoundingClientRect();
+
+                const offsetX = e.clientX - rect.left - rect.width / 2;
+                const offsetY = e.clientY - rect.top - rect.height / 2;
+
+                const handleMouseMove = (e) => {
+                    if (!this.isDragging) return;
+                    
+                    let x = e.clientX - canvasRect.left - offsetX;
+                    let y = e.clientY - canvasRect.top - offsetY;
+                    
+                    if (this.snapToGrid) {
+                        x = Math.round(x / this.gridSize) * this.gridSize;
+                        y = Math.round(y / this.gridSize) * this.gridSize;
+                    }
+                    
+                    const width = component.width || component.radius * 2;
+                    const height = component.height || component.radius * 2;
+                    
+                    div.style.left = (x - width / 2) + 'px';
+                    div.style.top = (y - height / 2) + 'px';
+                    
+                    component.x = x;
+                    component.y = y;
+                    
+                    this.updateConnectionLines();
+                };
+
+                const handleMouseUp = () => {
+                    if (this.isDragging) {
+                        this.saveState();
+                        this.isDragging = false;
+                        this.draggedComponent = null;
+                        this.updateStats();
+                    }
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                };
+
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+            }
+
+            selectComponent(component, div) {
+                if (gameState.currentTool === 'select') {
+                    this.deselectAll();
+                    div.classList.add('selected');
+                    gameState.selectedComponent = component;
+                    this.selectedComponents = [component];
+                }
+            }
+
+            deselectAll() {
+                document.querySelectorAll('.placed-component').forEach(el => {
+                    el.classList.remove('selected');
+                });
+                gameState.selectedComponent = null;
+                this.selectedComponents = [];
+            }
+
+            rotateSelected() {
+                if (this.selectedComponents.length === 0) return;
+                
+                this.saveState();
+                
+                this.selectedComponents.forEach(component => {
+                    component.rotation = (component.rotation || 0) + 90;
+                    if (component.rotation >= 360) component.rotation = 0;
+                    
+                    const div = document.querySelector(`[data-uid="${component.uid}"]`);
+                    if (div) {
+                        div.style.transform = `rotate(${component.rotation}deg)`;
+                    }
+                });
+                
+                audioManager.play('click');
+            }
+
+            copySelected() {
+                if (this.selectedComponents.length === 0) return;
+                
+                this.clipboard = [...this.selectedComponents];
+                this.showMessage(`Copied ${this.clipboard.length} component(s)`, 'success');
+                audioManager.play('click');
+            }
+
+            deleteSelected() {
+                if (this.selectedComponents.length === 0) return;
+                
+                this.saveState();
+                
+                this.selectedComponents.forEach(component => {
+                    this.removeComponent(component);
+                });
+                
+                this.selectedComponents = [];
+                audioManager.play('click');
+            }
+
+            removeComponent(component) {
+                if (component.id === 'control_unit' && gameState.placedComponents.length > 1) {
+                    this.showMessage('Cannot remove Control Unit while other components exist!', 'warning');
+                    return;
+                }
+
+                gameState.placedComponents = gameState.placedComponents.filter(c => c.uid !== component.uid);
+                const div = document.querySelector(`[data-uid="${component.uid}"]`);
+                if (div) div.remove();
+                
+                this.updateStats();
+                this.checkBattleReady();
+                this.updateConnectionLines();
+            }
+
+            saveState() {
+                // Remove future states if we're not at the end
+                if (this.historyIndex < gameState.componentHistory.length - 1) {
+                    gameState.componentHistory = gameState.componentHistory.slice(0, this.historyIndex + 1);
+                }
+                
+                // Add current state
+                gameState.componentHistory.push(JSON.parse(JSON.stringify(gameState.placedComponents)));
+                this.historyIndex = gameState.componentHistory.length - 1;
+                
+                // Limit history size
+                if (gameState.componentHistory.length > 50) {
+                    gameState.componentHistory.shift();
+                    this.historyIndex--;
+                }
+            }
+
+            undo() {
+                if (this.historyIndex > 0) {
+                    this.historyIndex--;
+                    this.restoreState(gameState.componentHistory[this.historyIndex]);
+                    audioManager.play('click');
+                }
+            }
+
+            redo() {
+                if (this.historyIndex < gameState.componentHistory.length - 1) {
+                    this.historyIndex++;
+                    this.restoreState(gameState.componentHistory[this.historyIndex]);
+                    audioManager.play('click');
+                }
+            }
+
+            restoreState(state) {
+                // Clear current components
+                document.querySelectorAll('.placed-component').forEach(el => el.remove());
+                
+                // Restore state
+                gameState.placedComponents = JSON.parse(JSON.stringify(state));
+                
+                // Re-render components
+                gameState.placedComponents.forEach(comp => this.renderComponent(comp));
+                
+                this.updateStats();
+                this.checkBattleReady();
+                this.updateConnectionLines();
+            }
+
+            toggleGrid() {
+                this.showGrid = !this.showGrid;
+                const overlay = document.querySelector('.grid-overlay');
+                overlay.style.display = this.showGrid ? 'block' : 'none';
+                audioManager.play('click');
+            }
+
+            toggleSnap() {
+                this.snapToGrid = !this.snapToGrid;
+                const btn = document.querySelector('[data-tool="snap"]');
+                btn.style.background = this.snapToGrid ? '#e94560' : 'rgba(255, 255, 255, 0.1)';
+                audioManager.play('click');
+            }
+
+            updateConnectionLines() {
+                // Clear existing lines
+                document.querySelectorAll('.connection-line').forEach(line => line.remove());
+                
+                // Find core component
+                const coreComponent = gameState.placedComponents.find(c => c.id === 'control_unit');
+                if (!coreComponent) return;
+                
+                // Draw connections from core to other components
+                gameState.placedComponents.forEach(component => {
+                    if (component.uid === coreComponent.uid) return;
+                    
+                    this.drawConnectionLine(coreComponent, component);
+                });
+            }
+
+            drawConnectionLine(from, to) {
+                const canvas = document.getElementById('gridCanvas');
+                const line = document.createElement('div');
+                line.className = 'connection-line';
+                
+                const dx = to.x - from.x;
+                const dy = to.y - from.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                
+                line.style.left = from.x + 'px';
+                line.style.top = from.y + 'px';
+                line.style.width = distance + 'px';
+                line.style.transform = `rotate(${angle}deg)`;
+                line.style.transformOrigin = '0 50%';
+                line.style.zIndex = '1';
+                
+                canvas.appendChild(line);
+            }
+
+            testBotPhysics() {
+                if (gameState.placedComponents.length === 0) {
+                    this.showMessage('No components to test!', 'warning');
+                    return;
+                }
+                
+                // Simple physics preview - add some bouncing animations
+                document.querySelectorAll('.placed-component').forEach((div, index) => {
+                    setTimeout(() => {
+                        div.style.animation = 'bounce 1s ease-in-out';
+                        setTimeout(() => {
+                            div.style.animation = '';
+                        }, 1000);
+                    }, index * 100);
+                });
+                
+                this.showMessage('Physics test complete!', 'success');
+                audioManager.play('battle');
+            }
+
+            showMessage(text, type = 'info') {
+                // Create temporary message display
+                const message = document.createElement('div');
+                message.style.cssText = `
+                    position: fixed;
+                    top: 80px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: ${type === 'error' ? '#f44336' : type === 'warning' ? '#ff9800' : type === 'success' ? '#4caf50' : '#2196f3'};
+                    color: white;
+                    padding: 15px 25px;
+                    border-radius: 10px;
+                    font-weight: bold;
+                    z-index: 1000;
+                    box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+                    animation: slideDown 0.3s ease-out;
+                `;
+                message.textContent = text;
+                document.body.appendChild(message);
+                
+                setTimeout(() => {
+                    message.style.animation = 'slideUp 0.3s ease-out';
+                    setTimeout(() => message.remove(), 300);
+                }, 2000);
+            }
+
+            findComponentDefinition(componentId) {
+                for (const category of Object.values(componentDefinitions)) {
+                    const comp = category.find(c => c.id === componentId);
+                    if (comp) return comp;
+                }
+                return null;
+            }
+
+            hasControlUnit() {
+                return gameState.placedComponents.some(c => c.id === 'control_unit');
+            }
+
+            calculateTotalWeight() {
+                return gameState.placedComponents.reduce((total, comp) => total + comp.mass, 0);
+            }
+
+            calculatePowerUsage() {
+                return gameState.placedComponents.reduce((total, comp) => total + (comp.powerDraw || 0), 0);
+            }
+
+            calculatePowerCapacity() {
+                return gameState.placedComponents.reduce((total, comp) => total + (comp.powerCapacity || 0), 0);
+            }
+
+            calculateCombatRating() {
+                let rating = 0;
+                gameState.placedComponents.forEach(comp => {
+                    if (comp.damage) rating += comp.damage * 2;
+                    if (comp.durability) rating += comp.durability / 10;
+                    if (comp.damageReduction) rating += comp.damageReduction * 100;
+                    if (comp.type === 'armor') rating += 20;
+                });
+                return Math.round(rating);
+            }
+
+            updateStats() {
+                const weight = this.calculateTotalWeight();
+                const powerUsage = this.calculatePowerUsage();
+                const powerCapacity = this.calculatePowerCapacity();
+                const componentCount = gameState.placedComponents.length;
+                const combatRating = this.calculateCombatRating();
+
+                // Update weight
+                document.getElementById('weightStat').textContent = `${weight} / ${this.maxWeight}`;
+                document.getElementById('weightBar').style.width = `${Math.min((weight / this.maxWeight) * 100, 100)}%`;
+
+                // Update power
+                document.getElementById('powerStat').textContent = `${powerUsage} / ${powerCapacity}`;
+                const powerPercent = powerCapacity > 0 ? (powerUsage / powerCapacity) * 100 : 0;
+                document.getElementById('powerBar').style.width = `${Math.min(powerPercent, 100)}%`;
+                
+                if (powerPercent > 100) {
+                    document.getElementById('powerBar').style.background = 'linear-gradient(90deg, #f44336, #ff5722)';
+                } else {
+                    document.getElementById('powerBar').style.background = 'linear-gradient(90deg, #e94560, #ff6b6b)';
+                }
+
+                // Update component count
+                document.getElementById('componentStat').textContent = componentCount;
+
+                // Update combat rating
+                document.getElementById('combatStat').textContent = combatRating;
+            }
+
+            checkBattleReady() {
+                const hasCore = this.hasControlUnit();
+                const hasWheel = gameState.placedComponents.some(c => c.type === 'wheel');
+                const hasMotor = gameState.placedComponents.some(c => c.type === 'motor');
+                const powerValid = this.calculatePowerUsage() <= this.calculatePowerCapacity();
+                const weightValid = this.calculateTotalWeight() <= this.maxWeight;
+
+                const ready = hasCore && hasWheel && hasMotor && powerValid && weightValid;
+                document.getElementById('battleBtn').disabled = !ready;
+                document.getElementById('tournamentBtn').disabled = !ready;
+            }
+
+            setupControls() {
+                document.getElementById('templateBtn').addEventListener('click', () => {
+                    this.showTemplates();
+                    audioManager.play('click');
+                });
+
+                document.getElementById('clearBtn').addEventListener('click', () => {
+                    if (confirm('Clear all components?')) {
+                        this.clearBot();
+                    }
+                });
+
+                document.getElementById('saveBtn').addEventListener('click', () => {
+                    this.saveBot();
+                });
+
+                document.getElementById('loadBtn').addEventListener('click', () => {
+                    this.loadBot();
+                });
+
+                document.getElementById('battleBtn').addEventListener('click', () => {
+                    this.startQuickBattle();
+                });
+
+                document.getElementById('tournamentBtn').addEventListener('click', () => {
+                    this.startTournament();
+                });
+            }
+
+            showTemplates() {
+                const templates = [
+                    {
+                        name: 'Speed Demon',
+                        description: 'Fast and agile bot',
+                        components: [
+                            { id: 'control_unit', x: 150, y: 150 },
+                            { id: 'racing_wheel', x: 100, y: 150 },
+                            { id: 'racing_wheel', x: 200, y: 150 },
+                            { id: 'turbo_motor', x: 150, y: 100 },
+                            { id: 'small_battery', x: 150, y: 200 },
+                            { id: 'drill_spike', x: 150, y: 80 }
+                        ]
+                    },
+                    {
+                        name: 'Tank Build',
+                        description: 'Heavy armor and weapons',
+                        components: [
+                            { id: 'control_unit', x: 150, y: 150 },
+                            { id: 'tank_track', x: 100, y: 150 },
+                            { id: 'tank_track', x: 200, y: 150 },
+                            { id: 'electric_motor', x: 150, y: 100 },
+                            { id: 'power_cell', x: 150, y: 200 },
+                            { id: 'armor_plating', x: 120, y: 120 },
+                            { id: 'armor_plating', x: 180, y: 120 },
+                            { id: 'hammer_arm', x: 150, y: 80 },
+                            { id: 'servo', x: 140, y: 90 }
+                        ]
+                    }
+                ];
+
+                // Create template selection dialog
+                const dialog = document.createElement('div');
+                dialog.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: linear-gradient(135deg, #1a1a2e, #16213e);
+                    padding: 30px;
+                    border-radius: 15px;
+                    border: 2px solid #e94560;
+                    z-index: 1000;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+                    min-width: 400px;
+                `;
+
+                dialog.innerHTML = `
+                    <h3 style="color: #e94560; margin-bottom: 20px; text-align: center;">Select Template</h3>
+                    ${templates.map((template, index) => `
+                        <div class="template-option" data-index="${index}" style="
+                            background: rgba(255,255,255,0.1);
+                            padding: 15px;
+                            margin: 10px 0;
+                            border-radius: 10px;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                            border: 2px solid transparent;
+                        ">
+                            <h4 style="color: #fff; margin-bottom: 5px;">${template.name}</h4>
+                            <p style="color: #aaa; font-size: 0.9em;">${template.description}</p>
+                        </div>
+                    `).join('')}
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button id="cancelTemplate" class="button secondary">Cancel</button>
+                    </div>
+                `;
+
+                document.body.appendChild(dialog);
+
+                // Add event listeners
+                dialog.querySelectorAll('.template-option').forEach(option => {
+                    option.addEventListener('mouseover', () => {
+                        option.style.borderColor = '#e94560';
+                        option.style.background = 'rgba(233, 69, 96, 0.2)';
+                    });
+                    option.addEventListener('mouseout', () => {
+                        option.style.borderColor = 'transparent';
+                        option.style.background = 'rgba(255,255,255,0.1)';
+                    });
+                    option.addEventListener('click', () => {
+                        const templateIndex = parseInt(option.dataset.index);
+                        this.applyTemplate(templates[templateIndex]);
+                        dialog.remove();
+                    });
+                });
+
+                document.getElementById('cancelTemplate').addEventListener('click', () => {
+                    dialog.remove();
+                });
+            }
+
+            applyTemplate(template) {
+                this.clearBot();
+                
+                template.components.forEach(compData => {
+                    const definition = this.findComponentDefinition(compData.id);
+                    if (definition && gameState.playerData.unlockedComponents.includes(compData.id)) {
+                        const component = {
+                            ...definition,
+                            x: compData.x,
+                            y: compData.y,
+                            uid: Date.now() + Math.random(),
+                            rotation: 0,
+                            connections: []
+                        };
+                        gameState.placedComponents.push(component);
+                        this.renderComponent(component);
+                    }
+                });
+
+                this.updateStats();
+                this.checkBattleReady();
+                this.updateConnectionLines();
+                this.showMessage('Template applied successfully!', 'success');
+            }
+
+            clearBot() {
+                this.saveState();
+                gameState.placedComponents = [];
+                document.querySelectorAll('.placed-component').forEach(el => el.remove());
+                document.querySelectorAll('.connection-line').forEach(el => el.remove());
+                this.updateStats();
+                this.checkBattleReady();
+                audioManager.play('click');
+            }
+
+            async saveBot() {
+                if (gameState.placedComponents.length === 0) {
+                    this.showMessage('No components to save!', 'warning');
+                    return;
+                }
+
+                const name = prompt('Enter a name for your bot:');
+                if (!name) return;
+
+                try {
+                    await db.bots.add({
+                        name: name,
+                        components: gameState.placedComponents,
+                        dateCreated: new Date(),
+                        wins: 0,
+                        losses: 0,
+                        rating: this.calculateCombatRating()
+                    });
+                    this.showMessage('Bot saved successfully!', 'success');
+                    audioManager.play('click');
+                } catch (error) {
+                    console.error('Error saving bot:', error);
+                    this.showMessage('Failed to save bot!', 'error');
+                }
+            }
+
+            async loadBot() {
+                try {
+                    const bots = await db.bots.toArray();
+                    if (bots.length === 0) {
+                        this.showMessage('No saved bots found!', 'warning');
+                        return;
+                    }
+
+                    // Create bot selection dialog
+                    const dialog = document.createElement('div');
+                    dialog.style.cssText = `
+                        position: fixed;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        background: linear-gradient(135deg, #1a1a2e, #16213e);
+                        padding: 30px;
+                        border-radius: 15px;
+                        border: 2px solid #e94560;
+                        z-index: 1000;
+                        box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+                        max-width: 500px;
+                        max-height: 600px;
+                        overflow-y: auto;
+                    `;
+
+                    dialog.innerHTML = `
+                        <h3 style="color: #e94560; margin-bottom: 20px; text-align: center;">Load Bot</h3>
+                        ${bots.map(bot => `
+                            <div class="bot-option" data-id="${bot.id}" style="
+                                background: rgba(255,255,255,0.1);
+                                padding: 15px;
+                                margin: 10px 0;
+                                border-radius: 10px;
+                                cursor: pointer;
+                                transition: all 0.3s ease;
+                                border: 2px solid transparent;
+                            ">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <h4 style="color: #fff; margin: 0;">${bot.name}</h4>
+                                    <span style="color: #e94560; font-weight: bold;">âš”ï¸ ${bot.rating || 0}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                                    <span style="color: #aaa; font-size: 0.8em;">${bot.components.length} components</span>
+                                    <span style="color: #aaa; font-size: 0.8em;">W:${bot.wins || 0} L:${bot.losses || 0}</span>
+                                </div>
+                                <div style="color: #aaa; font-size: 0.8em; margin-top: 5px;">
+                                    Created: ${new Date(bot.dateCreated).toLocaleDateString()}
+                                </div>
+                            </div>
+                        `).join('')}
+                        <div style="text-align: center; margin-top: 20px;">
+                            <button id="cancelLoad" class="button secondary">Cancel</button>
+                        </div>
+                    `;
+
+                    document.body.appendChild(dialog);
+
+                    // Add event listeners
+                    dialog.querySelectorAll('.bot-option').forEach(option => {
+                        option.addEventListener('mouseover', () => {
+                            option.style.borderColor = '#e94560';
+                            option.style.background = 'rgba(233, 69, 96, 0.2)';
+                        });
+                        option.addEventListener('mouseout', () => {
+                            option.style.borderColor = 'transparent';
+                            option.style.background = 'rgba(255,255,255,0.1)';
+                        });
+                        option.addEventListener('click', async () => {
+                            const botId = parseInt(option.dataset.id);
+                            const bot = bots.find(b => b.id === botId);
+                            if (bot) {
+                                this.clearBot();
+                                gameState.placedComponents = bot.components.map(comp => ({
+                                    ...comp,
+                                    uid: Date.now() + Math.random() // New UID
+                                }));
+                                gameState.placedComponents.forEach(comp => this.renderComponent(comp));
+                                this.updateStats();
+                                this.checkBattleReady();
+                                this.updateConnectionLines();
+                                this.showMessage(`Bot "${bot.name}" loaded successfully!`, 'success');
+                            }
+                            dialog.remove();
+                        });
+                    });
+
+                    document.getElementById('cancelLoad').addEventListener('click', () => {
+                        dialog.remove();
+                    });
+
+                } catch (error) {
+                    console.error('Error loading bots:', error);
+                    this.showMessage('Failed to load bots!', 'error');
+                }
+            }
+
+            startQuickBattle() {
+                gameState.mode = 'battle';
+                showMode('battle');
+                window.battleMode = new EnhancedBattleMode();
+            }
+
+            startTournament() {
+                gameState.mode = 'tournament';
+                showMode('tournament');
+                // Tournament initialization will be handled by the tournament system
+            }
+        }
+
+        // Enhanced Battle Mode
+        class EnhancedBattleMode {
+            constructor() {
+                this.engine = Engine.create();
+                this.engine.gravity.y = 0; // Top-down view
+                this.battleDuration = 180; // 3 minutes
+                this.battleTimer = this.battleDuration;
+                this.battleStartTime = Date.now();
+                
+                this.arenaHazards = [];
+                this.projectiles = [];
+                
+                this.setupArena();
+                this.createBots();
+                this.setupControls();
+                this.setupPhysics();
+                this.startBattleTimer();
+                this.startBattle();
+            }
+
+            setupArena() {
+                const battleCanvas = document.getElementById('battleCanvas');
+                
+                this.render = Render.create({
+                    element: battleCanvas,
+                    engine: this.engine,
+                    options: {
+                        width: battleCanvas.offsetWidth,
+                        height: battleCanvas.offsetHeight,
+                        wireframes: false,
+                        background: this.getArenaBackground(),
+                        showVelocity: false,
+                        showAngleIndicator: false
+                    }
+                });
+
+                this.createArenaWalls();
+                this.createArenaHazards();
+
+                // Arena selection
+                document.querySelectorAll('.arena-option').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        gameState.currentArena = btn.dataset.arena;
+                        this.updateArena();
+                        audioManager.play('click');
+                    });
+                });
+            }
+
+            getArenaBackground() {
+                switch(gameState.currentArena) {
+                    case 'classic': return '#1e1e30';
+                    case 'hazard': return '#2d1b1b';
+                    case 'pit': return '#1b1b2d';
+                    case 'spinner': return '#1b2d1b';
+                    default: return '#1e1e30';
+                }
+            }
+
+            createArenaWalls() {
+                const thickness = 50;
+                const width = this.render.options.width;
+                const height = this.render.options.height;
+
+                const wallColor = gameState.currentArena === 'pit' ? '#8b0000' : '#0f3460';
+
+                const walls = [
+                    Bodies.rectangle(width/2, -thickness/2, width, thickness, { 
+                        isStatic: true, 
+                        render: { fillStyle: wallColor },
+                        label: 'wall'
+                    }),
+                    Bodies.rectangle(width/2, height + thickness/2, width, thickness, { 
+                        isStatic: true, 
+                        render: { fillStyle: wallColor },
+                        label: 'wall'
+                    }),
+                    Bodies.rectangle(-thickness/2, height/2, thickness, height, { 
+                        isStatic: true, 
+                        render: { fillStyle: wallColor },
+                        label: 'wall'
+                    }),
+                    Bodies.rectangle(width + thickness/2, height/2, thickness, height, { 
+                        isStatic: true, 
+                        render: { fillStyle: wallColor },
+                        label: 'wall'
+                    })
+                ];
+
+                World.add(this.engine.world, walls);
+            }
+
+            createArenaHazards() {
+                const width = this.render.options.width;
+                const height = this.render.options.height;
+
+                switch(gameState.currentArena) {
+                    case 'hazard':
+                        // Electric barriers
+                        for (let i = 0; i < 4; i++) {
+                            const hazard = Bodies.rectangle(
+                                200 + i * 200,
+                                height / 2,
+                                20,
+                                100,
+                                {
+                                    isStatic: true,
+                                    render: { fillStyle: '#ffff00' },
+                                    label: 'hazard_electric',
+                                    isSensor: true
+                                }
+                            );
+                            this.arenaHazards.push(hazard);
+                        }
+                        break;
+                    
+                    case 'pit':
+                        // Central pit
+                        const pit = Bodies.rectangle(
+                            width / 2,
+                            height / 2,
+                            150,
+                            150,
+                            {
+                                isStatic: true,
+                                render: { fillStyle: '#000000' },
+                                label: 'hazard_pit',
+                                isSensor: true
+                            }
+                        );
+                        this.arenaHazards.push(pit);
+                        break;
+                    
+                    case 'spinner':
+                        // Rotating hammers
+                        for (let i = 0; i < 2; i++) {
+                            const hammer = Bodies.rectangle(
+                                300 + i * 400,
+                                height / 2,
+                                100,
+                                20,
+                                {
+                                    render: { fillStyle: '#ff4500' },
+                                    label: 'hazard_hammer'
+                                }
+                            );
+                            
+                            const constraint = Constraint.create({
+                                pointA: { x: 300 + i * 400, y: height / 2 },
+                                bodyB: hammer,
+                                stiffness: 1,
+                                render: { visible: false }
+                            });
+                            
+                            this.arenaHazards.push(hammer);
+                            World.add(this.engine.world, [hammer, constraint]);
+                        }
+                        break;
+                }
+
+                if (this.arenaHazards.length > 0) {
+                    World.add(this.engine.world, this.arenaHazards);
+                }
+            }
+
+            updateArena() {
+                // Clear existing hazards
+                this.arenaHazards.forEach(hazard => {
+                    World.remove(this.engine.world, hazard);
+                });
+                this.arenaHazards = [];
+
+                // Update background
+                this.render.options.background = this.getArenaBackground();
+
+                // Recreate hazards
+                this.createArenaHazards();
+            }
+
+            createBots() {
+                // Create player bot from builder components
+                this.playerBot = this.createBotFromComponents(
+                    gameState.placedComponents,
+                    200,
+                    this.render.options.height / 2,
+                    'player'
+                );
+
+                // Create AI bot
+                const aiComponents = this.generateAIBotComponents();
+                this.aiBot = this.createBotFromComponents(
+                    aiComponents,
+                    this.render.options.width - 200,
+                    this.render.options.height / 2,
+                    'ai'
+                );
+
+                // Start AI behavior
+                this.startAI();
+            }
+
+            createBotFromComponents(components, startX, startY, tag) {
+                const bot = {
+                    bodies: [],
+                    constraints: [],
+                    wheels: [],
+                    motors: [],
+                    weapons: [],
+                    armor: [],
+                    core: null,
+                    tag: tag,
+                    health: 100,
+                    maxHealth: 100,
+                    damageReduction: 0
+                };
+
+                // Find core component
+                const coreComp = components.find(c => c.id === 'control_unit' || c.id === 'advanced_cpu');
+                if (!coreComp) return bot;
+
+                // Create core body
+                const core = Bodies.rectangle(
+                    startX,
+                    startY,
+                    coreComp.width,
+                    coreComp.height,
+                    {
+                        label: `${tag}_core`,
+                        render: { fillStyle: coreComp.color },
+                        density: 0.002 * coreComp.mass,
+                        frictionAir: 0.05
+                    }
+                );
+                
+                core.component = coreComp;
+                core.durability = coreComp.durability;
+                core.maxDurability = coreComp.durability;
+                bot.core = core;
+                bot.bodies.push(core);
+
+                // Create other component bodies
+                components.forEach(comp => {
+                    if (comp.id === 'control_unit' || comp.id === 'advanced_cpu') return;
+
+                    let body;
+                    const relativeX = startX + (comp.x - 150); // Assuming 150,150 is center
+                    const relativeY = startY + (comp.y - 150);
+
+                    if (comp.type === 'wheel') {
+                        body = Bodies.circle(
+                            relativeX,
+                            relativeY,
+                            comp.radius,
+                            {
+                                label: `${tag}_wheel_${comp.uid}`,
+                                render: { fillStyle: comp.color },
+                                density: 0.002 * comp.mass,
+                                friction: 0.8,
+                                frictionStatic: 1
+                            }
+                        );
+                        bot.wheels.push({ body, component: comp });
+                    } else if (comp.radius) {
+                        body = Bodies.circle(
+                            relativeX,
+                            relativeY,
+                            comp.radius,
+                            {
+                                label: `${tag}_${comp.type}_${comp.uid}`,
+                                render: { fillStyle: comp.color },
+                                density: 0.002 * comp.mass
+                            }
+                        );
+                    } else {
+                        body = Bodies.rectangle(
+                            relativeX,
+                            relativeY,
+                            comp.width || 40,
+                            comp.height || 40,
+                            {
+                                label: `${tag}_${comp.type}_${comp.uid}`,
+                                render: { fillStyle: comp.color },
+                                density: 0.002 * comp.mass
+                            }
+                        );
+                    }
+
+                    body.component = comp;
+                    body.durability = comp.durability;
+                    body.maxDurability = comp.durability;
+                    bot.bodies.push(body);
+
+                    // Create constraint to connect to core
+                    const constraint = Constraint.create({
+                        bodyA: core,
+                        bodyB: body,
+                        stiffness: 0.8,
+                        render: { visible: false }
+                    });
+                    bot.constraints.push(constraint);
+
+                    // Track special components
+                    if (comp.type === 'motor') {
+                        bot.motors.push({ body, component: comp });
+                    } else if (comp.type === 'weapon') {
+                        bot.weapons.push({ 
+                            body, 
+                            component: comp, 
+                            active: false,
+                            lastAttack: 0
+                        });
+                    } else if (comp.type === 'armor') {
+                        bot.armor.push({ body, component: comp });
+                        bot.damageReduction += comp.damageReduction || 0;
+                    }
+                });
+
+                // Add all bodies and constraints to world
+                World.add(this.engine.world, bot.bodies);
+                World.add(this.engine.world, bot.constraints);
+
+                return bot;
+            }
+
+            generateAIBotComponents() {
+                // Generate AI bot based on player level
+                const level = gameState.playerData.level;
+                const baseComponents = [
+                    { id: 'control_unit', x: 150, y: 150 },
+                    { id: 'small_wheel', x: 120, y: 150 },
+                    { id: 'small_wheel', x: 180, y: 150 },
+                    { id: 'electric_motor', x: 150, y: 120 },
+                    { id: 'small_battery', x: 150, y: 180 },
+                    { id: 'drill_spike', x: 150, y: 100 }
+                ];
+
+                // Add more components based on level
+                if (level >= 3) {
+                    baseComponents.push({ id: 'armor_plating', x: 130, y: 130 });
+                }
+                if (level >= 5) {
+                    baseComponents[5] = { id: 'spinner_blade', x: 150, y: 100 }; // Replace drill with spinner
+                    baseComponents.push({ id: 'servo', x: 140, y: 110 });
+                }
+                if (level >= 7) {
+                    baseComponents.push({ id: 'power_cell', x: 170, y: 180 });
+                }
+
+                return baseComponents.map(comp => ({
+                    ...this.findComponentDefinition(comp.id),
+                    x: comp.x,
+                    y: comp.y,
+                    uid: Date.now() + Math.random()
+                })).filter(comp => comp.id);
+            }
+
+            findComponentDefinition(componentId) {
+                for (const category of Object.values(componentDefinitions)) {
+                    const comp = category.find(c => c.id === componentId);
+                    if (comp) return comp;
+                }
+                return null;
+            }
+
+            setupControls() {
+                const keys = {};
+                
+                document.addEventListener('keydown', (e) => {
+                    keys[e.key.toLowerCase()] = true;
+                    
+                    gameState.controls.forward = keys['w'] || keys['arrowup'];
+                    gameState.controls.backward = keys['s'] || keys['arrowdown'];
+                    gameState.controls.left = keys['a'] || keys['arrowleft'];
+                    gameState.controls.right = keys['d'] || keys['arrowright'];
+                    gameState.controls.weapon1 = keys[' '];
+                    gameState.controls.weapon2 = keys['shift'];
+                    gameState.controls.targetLock = keys['tab'];
+                    
+                    if (keys['tab']) e.preventDefault();
+                });
+
+                document.addEventListener('keyup', (e) => {
+                    keys[e.key.toLowerCase()] = false;
+                    
+                    gameState.controls.forward = keys['w'] || keys['arrowup'];
+                    gameState.controls.backward = keys['s'] || keys['arrowdown'];
+                    gameState.controls.left = keys['a'] || keys['arrowleft'];
+                    gameState.controls.right = keys['d'] || keys['arrowright'];
+                    gameState.controls.weapon1 = keys[' '];
+                    gameState.controls.weapon2 = keys['shift'];
+                    gameState.controls.targetLock = keys['tab'];
+                });
+            }
+
+            setupPhysics() {
+                // Collision detection
+                Events.on(this.engine, 'collisionStart', (event) => {
+                    event.pairs.forEach(pair => {
+                        this.handleCollision(pair.bodyA, pair.bodyB);
+                    });
+                });
+
+                // Update loop
+                Events.on(this.engine, 'beforeUpdate', () => {
+                    this.updateBots();
+                    this.updateHazards();
+                    this.updateProjectiles();
+                    this.checkVictoryConditions();
+                });
+            }
+
+            updateBots() {
+                if (!gameState.battleActive) return;
+
+                // Update player bot
+                if (this.playerBot) {
+                    this.updateBotMovement(this.playerBot, gameState.controls);
+                    this.updateWeapons(this.playerBot, gameState.controls);
+                }
+
+                // Update AI bot
+                if (this.aiBot) {
+                    this.updateAI();
+                }
+
+                // Update health bars
+                this.updateHealthBars();
+            }
+
+            updateBotMovement(bot, controls) {
+                const torque = 0.02;
+                const force = 0.008;
+
+                // Enhanced movement with motor multipliers
+                bot.wheels.forEach(wheel => {
+                    const motorMultiplier = bot.motors.length > 0 ? bot.motors[0].component.torqueMultiplier || 1 : 1;
+                    
+                    if (controls.forward) {
+                        Body.applyForce(wheel.body, wheel.body.position, {
+                            x: Math.cos(bot.core.angle) * force * motorMultiplier,
+                            y: Math.sin(bot.core.angle) * force * motorMultiplier
+                        });
+                    }
+                    if (controls.backward) {
+                        Body.applyForce(wheel.body, wheel.body.position, {
+                            x: -Math.cos(bot.core.angle) * force * motorMultiplier,
+                            y: -Math.sin(bot.core.angle) * force * motorMultiplier
+                        });
+                    }
+                });
+
+                // Rotation with gyroscope stabilization
+                const gyroStabilization = bot.bodies.find(b => b.component?.id === 'gyroscope')?.component?.stabilization || 0;
+                const adjustedTorque = torque * (1 + gyroStabilization);
+
+                if (controls.left) {
+                    Body.setAngularVelocity(bot.core, -adjustedTorque);
+                }
+                if (controls.right) {
+                    Body.setAngularVelocity(bot.core, adjustedTorque);
+                }
+            }
+
+            updateWeapons(bot, controls) {
+                const now = Date.now();
+                
+                bot.weapons.forEach(weapon => {
+                    const timeSinceLastAttack = now - weapon.lastAttack;
+                    const attackCooldown = (weapon.component.attackRate || 1) * 1000;
+                    
+                    if ((controls.weapon1 || controls.weapon2) && timeSinceLastAttack >= attackCooldown) {
+                        this.activateWeapon(weapon, bot);
+                        weapon.lastAttack = now;
+                    }
+                });
+            }
+
+            activateWeapon(weapon, bot) {
+                const comp = weapon.component;
+                
+                switch(comp.weaponType) {
+                    case 'spinner':
+                        Body.setAngularVelocity(weapon.body, 0.5);
+                        weapon.active = true;
+                        setTimeout(() => {
+                            if (weapon.body) Body.setAngularVelocity(weapon.body, 0);
+                            weapon.active = false;
+                        }, 2000);
+                        break;
+                        
+                    case 'hammer':
+                        if (!weapon.swinging) {
+                            weapon.swinging = true;
+                            Body.setAngularVelocity(weapon.body, 0.3);
+                            setTimeout(() => {
+                                if (weapon.body) Body.setAngularVelocity(weapon.body, -0.3);
+                                setTimeout(() => {
+                                    weapon.swinging = false;
+                                }, 250);
+                            }, 250);
+                        }
+                        break;
+                        
+                    case 'flipper':
+                        const force = comp.force || 50;
+                        Body.applyForce(weapon.body, weapon.body.position, {
+                            x: Math.cos(bot.core.angle) * force * 0.001,
+                            y: Math.sin(bot.core.angle) * force * 0.001
+                        });
+                        break;
+                        
+                    case 'ranged':
+                        this.fireProjectile(weapon, bot);
+                        break;
+                }
+                
+                audioManager.play('hit');
+            }
+
+            fireProjectile(weapon, bot) {
+                const projectile = Bodies.circle(
+                    weapon.body.position.x,
+                    weapon.body.position.y,
+                    5,
+                    {
+                        render: { fillStyle: '#00ffff' },
+                        label: `${bot.tag}_projectile`,
+                        density: 0.001
+                    }
+                );
+                
+                projectile.component = { damage: weapon.component.damage };
+                projectile.shooter = bot.tag;
+                
+                const force = 0.02;
+                Body.applyForce(projectile, projectile.position, {
+                    x: Math.cos(bot.core.angle) * force,
+                    y: Math.sin(bot.core.angle) * force
+                });
+                
+                World.add(this.engine.world, projectile);
+                this.projectiles.push(projectile);
+                
+                // Remove projectile after 3 seconds
+                setTimeout(() => {
+                    World.remove(this.engine.world, projectile);
+                    this.projectiles = this.projectiles.filter(p => p !== projectile);
+                }, 3000);
+            }
+
+            updateProjectiles() {
+                // Clean up out-of-bounds projectiles
+                this.projectiles = this.projectiles.filter(projectile => {
+                    const pos = projectile.position;
+                    const bounds = this.render.options;
+                    
+                    if (pos.x < 0 || pos.x > bounds.width || pos.y < 0 || pos.y > bounds.height) {
+                        World.remove(this.engine.world, projectile);
+                        return false;
+                    }
+                    return true;
+                });
+            }
+
+            updateHazards() {
+                const now = Date.now();
+                
+                this.arenaHazards.forEach(hazard => {
+                    if (hazard.label === 'hazard_hammer') {
+                        // Rotate hammers
+                        Body.setAngle(hazard, now * 0.005);
+                    }
+                });
+            }
+
+            startAI() {
+                this.aiState = {
+                    target: this.playerBot,
+                    attackRange: 120,
+                    fleeRange: 60,
+                    updateInterval: 100,
+                    lastUpdate: 0,
+                    strategy: 'aggressive', // aggressive, defensive, hit_and_run
+                    lastStrategyChange: 0
+                };
+            }
+
+            updateAI() {
+                const now = Date.now();
+                if (now - this.aiState.lastUpdate < this.aiState.updateInterval) return;
+                this.aiState.lastUpdate = now;
+
+                if (!this.playerBot?.core || !this.aiBot?.core) return;
+
+                // Change strategy occasionally
+                if (now - this.aiState.lastStrategyChange > 10000) {
+                    const strategies = ['aggressive', 'defensive', 'hit_and_run'];
+                    this.aiState.strategy = strategies[Math.floor(Math.random() * strategies.length)];
+                    this.aiState.lastStrategyChange = now;
+                }
+
+                // Calculate direction to player
+                const dx = this.playerBot.core.position.x - this.aiBot.core.position.x;
+                const dy = this.playerBot.core.position.y - this.aiBot.core.position.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const angle = Math.atan2(dy, dx);
+
+                // Calculate AI health percentage
+                const aiHealthPercent = this.aiBot.core.durability / this.aiBot.core.maxDurability;
+
+                // Turn towards or away from player based on strategy
+                const targetAngle = this.aiState.strategy === 'defensive' && aiHealthPercent < 0.3 ? 
+                    angle + Math.PI : angle; // Turn away if low health and defensive
+                
+                const angleDiff = targetAngle - this.aiBot.core.angle;
+                const normalizedDiff = ((angleDiff + Math.PI) % (2 * Math.PI)) - Math.PI;
+
+                let aiControls = {
+                    forward: false,
+                    backward: false,
+                    left: normalizedDiff < -0.2,
+                    right: normalizedDiff > 0.2,
+                    weapon1: false,
+                    weapon2: false
+                };
+
+                // Strategy-based behavior
+                switch(this.aiState.strategy) {
+                    case 'aggressive':
+                        aiControls.forward = distance > 80;
+                        aiControls.backward = distance < 40;
+                        aiControls.weapon1 = distance < this.aiState.attackRange;
+                        aiControls.weapon2 = distance < this.aiState.attackRange * 0.7;
+                        break;
+                        
+                    case 'defensive':
+                        aiControls.forward = distance > 150;
+                        aiControls.backward = distance < 100;
+                        aiControls.weapon1 = distance < this.aiState.attackRange && aiHealthPercent > 0.5;
+                        break;
+                        
+                    case 'hit_and_run':
+                        const attacking = Math.sin(now * 0.002) > 0;
+                        aiControls.forward = attacking && distance > 60;
+                        aiControls.backward = !attacking || distance < 80;
+                        aiControls.weapon1 = attacking && distance < this.aiState.attackRange;
+                        break;
+                }
+
+                this.updateBotMovement(this.aiBot, aiControls);
+                this.updateWeapons(this.aiBot, aiControls);
+            }
+
+            handleCollision(bodyA, bodyB) {
+                // Weapon vs component collisions
+                this.checkWeaponCollision(bodyA, bodyB);
+                this.checkWeaponCollision(bodyB, bodyA);
+                
+                // Hazard collisions
+                this.checkHazardCollision(bodyA, bodyB);
+                this.checkHazardCollision(bodyB, bodyA);
+            }
+
+            checkWeaponCollision(weaponBody, targetBody) {
+                const isWeapon = weaponBody.label && (
+                    weaponBody.label.includes('weapon') || 
+                    weaponBody.label.includes('projectile')
+                );
+                
+                if (!isWeapon || !targetBody.durability) return;
+                
+                const damage = weaponBody.component?.damage || 10;
+                const weaponTag = weaponBody.label.split('_')[0];
+                const targetTag = targetBody.label.split('_')[0];
+                
+                // Don't damage own components
+                if (weaponTag === targetTag) return;
+                
+                this.applyDamage(targetBody, damage, weaponTag);
+                this.createSparks(targetBody.position);
+                
+                // Update battle stats
+                if (weaponTag === 'player') {
+                    gameState.battleStats.damageDealt += damage;
+                    gameState.battleStats.hitsLanded++;
+                }
+            }
+
+            checkHazardCollision(hazardBody, targetBody) {
+                if (!hazardBody.label || !hazardBody.label.includes('hazard')) return;
+                if (!targetBody.component) return;
+                
+                switch(hazardBody.label) {
+                    case 'hazard_electric':
+                        this.applyDamage(targetBody, 5, 'hazard');
+                        this.createElectricEffect(targetBody.position);
+                        break;
+                        
+                    case 'hazard_pit':
+                        // Instant destruction if core falls in pit
+                        if (targetBody.label.includes('core')) {
+                            this.applyDamage(targetBody, targetBody.durability, 'hazard');
+                        }
+                        break;
+                        
+                    case 'hazard_hammer':
+                        this.applyDamage(targetBody, 15, 'hazard');
+                        this.createExplosion(targetBody.position);
+                        break;
+                }
+            }
+
+            applyDamage(body, damage, source) {
+                if (!body.durability) return;
+
+                // Apply armor damage reduction
+                const bot = body.label.includes('player') ? this.playerBot : this.aiBot;
+                const actualDamage = damage * (1 - (bot?.damageReduction || 0));
+                
+                body.durability -= actualDamage;
+                
+                // Visual damage indication
+                const damagePercent = Math.max(0, body.durability / body.maxDurability);
+                const originalColor = body.component?.color || '#888';
+                
+                // Parse color and darken based on damage
+                const r = parseInt(originalColor.slice(1, 3), 16);
+                const g = parseInt(originalColor.slice(3, 5), 16);
+                const b = parseInt(originalColor.slice(5, 7), 16);
+                
+                body.render.fillStyle = `rgb(${Math.floor(r * damagePercent)}, ${Math.floor(g * damagePercent)}, ${Math.floor(b * damagePercent)})`;
+
+                // Component destruction
+                if (body.durability <= 0) {
+                    this.destroyComponent(body);
+                }
+                
+                audioManager.play('hit');
+            }
+
+            destroyComponent(body) {
+                this.createExplosion(body.position);
+
+                // Check if it's a core component (game over)
+                if (body.label && body.label.includes('core')) {
+                    const isPlayerCore = body.label.includes('player');
+                    this.endBattle(isPlayerCore ? 'defeat' : 'victory');
+                    return;
+                }
+
+                // Remove body and constraints
+                World.remove(this.engine.world, body);
+                
+                const constraints = this.engine.world.constraints.filter(c => 
+                    c.bodyA === body || c.bodyB === body
+                );
+                constraints.forEach(c => World.remove(this.engine.world, c));
+                
+                // Remove from bot arrays
+                const bots = [this.playerBot, this.aiBot];
+                bots.forEach(bot => {
+                    if (bot) {
+                        bot.bodies = bot.bodies.filter(b => b !== body);
+                        bot.wheels = bot.wheels.filter(w => w.body !== body);
+                        bot.weapons = bot.weapons.filter(w => w.body !== body);
+                        bot.motors = bot.motors.filter(m => m.body !== body);
+                        bot.armor = bot.armor.filter(a => a.body !== body);
+                    }
+                });
+            }
+
+            createSparks(position) {
+                for (let i = 0; i < 8; i++) {
+                    const spark = document.createElement('div');
+                    spark.className = 'particle spark';
+                    spark.style.left = position.x + 'px';
+                    spark.style.top = position.y + 'px';
+                    spark.style.setProperty('--dx', (Math.random() - 0.5) * 60 + 'px');
+                    spark.style.setProperty('--dy', (Math.random() - 0.5) * 60 + 'px');
+                    document.getElementById('battleCanvas').appendChild(spark);
+                    
+                    setTimeout(() => spark.remove(), 800);
+                }
+            }
+
+            createExplosion(position) {
+                for (let i = 0; i < 25; i++) {
+                    const particle = document.createElement('div');
+                    particle.className = 'particle explosion-particle';
+                    particle.style.left = position.x + 'px';
+                    particle.style.top = position.y + 'px';
+                    particle.style.width = Math.random() * 8 + 4 + 'px';
+                    particle.style.height = particle.style.width;
+                    particle.style.background = i % 3 === 0 ? '#ff6b6b' : i % 3 === 1 ? '#ffeb3b' : '#ff4500';
+                    particle.style.setProperty('--dx', (Math.random() - 0.5) * 120 + 'px');
+                    particle.style.setProperty('--dy', (Math.random() - 0.5) * 120 + 'px');
+                    document.getElementById('battleCanvas').appendChild(particle);
+                    
+                    setTimeout(() => particle.remove(), 1200);
+                }
+                audioManager.play('explosion');
+            }
+
+            createElectricEffect(position) {
+                for (let i = 0; i < 12; i++) {
+                    const bolt = document.createElement('div');
+                    bolt.className = 'particle';
+                    bolt.style.left = position.x + 'px';
+                    bolt.style.top = position.y + 'px';
+                    bolt.style.width = '2px';
+                    bolt.style.height = Math.random() * 30 + 10 + 'px';
+                    bolt.style.background = '#00ffff';
+                    bolt.style.transform = `rotate(${Math.random() * 360}deg)`;
+                    bolt.style.animation = 'sparkFade 0.3s ease-out forwards';
+                    document.getElementById('battleCanvas').appendChild(bolt);
+                    
+                    setTimeout(() => bolt.remove(), 300);
+                }
+            }
+
+            updateHealthBars() {
+                // Update player health
+                if (this.playerBot?.core) {
+                    const health = Math.max(0, this.playerBot.core.durability);
+                    const maxHealth = this.playerBot.core.maxDurability;
+                    const percentage = (health / maxHealth) * 100;
+                    
+                    document.getElementById('playerHealthFill').style.width = percentage + '%';
+                    document.getElementById('playerHealthText').textContent = `${Math.round(health)} / ${maxHealth}`;
+                }
+
+                // Update AI health
+                if (this.aiBot?.core) {
+                    const health = Math.max(0, this.aiBot.core.durability);
+                    const maxHealth = this.aiBot.core.maxDurability;
+                    const percentage = (health / maxHealth) * 100;
+                    
+                    document.getElementById('enemyHealthFill').style.width = percentage + '%';
+                    document.getElementById('enemyHealthText').textContent = `${Math.round(health)} / ${maxHealth}`;
+                }
+            }
+
+            startBattleTimer() {
+                this.timerInterval = setInterval(() => {
+                    if (!gameState.battleActive) return;
+                    
+                    this.battleTimer--;
+                    
+                    const minutes = Math.floor(this.battleTimer / 60);
+                    const seconds = this.battleTimer % 60;
+                    document.getElementById('battleTimer').textContent = 
+                        `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    if (this.battleTimer <= 0) {
+                        this.endBattle('timeout');
+                    }
+                }, 1000);
+            }
+
+            checkVictoryConditions() {
+                if (!gameState.battleActive) return;
+
+                // Check core destruction
+                if (!this.playerBot?.core || this.playerBot.core.durability <= 0) {
+                    this.endBattle('defeat');
+                } else if (!this.aiBot?.core || this.aiBot.core.durability <= 0) {
+                    this.endBattle('victory');
+                }
+            }
+
+            async endBattle(result) {
+                gameState.battleActive = false;
+                clearInterval(this.timerInterval);
+                
+                // Calculate battle duration
+                const duration = Math.floor((Date.now() - this.battleStartTime) / 1000);
+                const minutes = Math.floor(duration / 60);
+                const seconds = duration % 60;
+                
+                // Show game over overlay
+                const overlay = document.getElementById('gameOverlay');
+                const resultText = document.getElementById('gameResult');
+                
+                overlay.style.display = 'flex';
+                
+                let xpGained = 0;
+                if (result === 'victory') {
+                    resultText.textContent = 'VICTORY!';
+                    resultText.className = 'victory';
+                    xpGained = 100 + gameState.battleStats.damageDealt;
+                    audioManager.play('victory');
+                } else if (result === 'timeout') {
+                    resultText.textContent = 'TIMEOUT!';
+                    resultText.className = 'defeat';
+                    xpGained = 25;
+                } else {
+                    resultText.textContent = 'DEFEAT!';
+                    resultText.className = 'defeat';
+                    xpGained = 25 + Math.floor(gameState.battleStats.damageDealt / 2);
+                    audioManager.play('defeat');
+                }
+
+                // Update battle stats display
+                document.getElementById('damageDealt').textContent = Math.round(gameState.battleStats.damageDealt);
+                document.getElementById('hitsLanded').textContent = gameState.battleStats.hitsLanded;
+                document.getElementById('battleDuration').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                document.getElementById('xpGained').textContent = `+${xpGained}`;
+
+                // Save battle history
+                await db.battleHistory.add({
+                    playerBot: JSON.stringify(gameState.placedComponents),
+                    enemyBot: 'AI Opponent',
+                    result: result === 'victory' ? 'victory' : 'defeat',
+                    duration: duration,
+                    damageDealt: gameState.battleStats.damageDealt,
+                    dateCompleted: new Date()
+                });
+
+                // Award XP
+                await achievementSystem.awardXP(xpGained);
+
+                // Stop physics
+                Render.stop(this.render);
+                Engine.clear(this.engine);
+
+                // Setup return button
+                document.getElementById('rematchBtn').onclick = () => {
+                    overlay.style.display = 'none';
+                    // Reset battle
+                    this.resetBattle();
+                };
+
+                document.getElementById('returnBtn').onclick = () => {
+                    showMode('builder');
+                };
+            }
+
+            resetBattle() {
+                // Clear existing world
+                World.clear(this.engine.world);
+                
+                // Reset stats
+                gameState.battleStats = {
+                    damageDealt: 0,
+                    hitsLanded: 0,
+                    battleStartTime: Date.now()
+                };
+                
+                this.battleTimer = this.battleDuration;
+                this.arenaHazards = [];
+                this.projectiles = [];
+                
+                // Recreate everything
+                this.setupArena();
+                this.createBots();
+                this.startBattleTimer();
+                this.startBattle();
+            }
+
+            startBattle() {
+                gameState.battleActive = true;
+                
+                // Start physics and rendering
+                Engine.run(this.engine);
+                Render.run(this.render);
+
+                // Initialize bot health displays
+                this.updateHealthBars();
+            }
+        }
+
+        // Tournament System
+        function startTournamentMatch(matchId) {
+            // This would start a specific tournament match
+            console.log('Starting tournament match:', matchId);
+            showMode('battle');
+            window.battleMode = new EnhancedBattleMode();
+        }
+
+        // Mode switching function
+        function showMode(mode) {
+            document.getElementById('builderMode').style.display = mode === 'builder' ? 'flex' : 'none';
+            document.getElementById('battleMode').style.display = mode === 'battle' ? 'flex' : 'none';
+            document.getElementById('tournamentMode').style.display = mode === 'tournament' ? 'block' : 'none';
+            
+            gameState.mode = mode;
+        }
+
+        // Sound control
+        document.getElementById('soundToggle').addEventListener('click', () => {
+            const enabled = audioManager.toggle();
+            document.getElementById('soundToggle').textContent = enabled ? 'ðŸ”Š' : 'ðŸ”‡';
+        });
+
+        // Add CSS animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideDown {
+                from { transform: translateX(-50%) translateY(-100%); opacity: 0; }
+                to { transform: translateX(-50%) translateY(0); opacity: 1; }
+            }
+            @keyframes slideUp {
+                from { transform: translateX(-50%) translateY(0); opacity: 1; }
+                to { transform: translateX(-50%) translateY(-100%); opacity: 0; }
+            }
+            @keyframes bounce {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-10px); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Initialize the game
+        window.addEventListener('load', () => {
+            // Hide loading screen with progress
+            let progress = 0;
+            const progressBar = document.querySelector('.progress-bar');
+            const loadingInterval = setInterval(() => {
+                progress += Math.random() * 30;
+                progressBar.style.width = Math.min(progress, 100) + '%';
+                
+                if (progress >= 100) {
+                    clearInterval(loadingInterval);
+                    setTimeout(() => {
+                        document.getElementById('loadingScreen').style.display = 'none';
+                        
+                        // Initialize builder mode
+                        window.builderMode = new EnhancedBuilderMode();
+                        
+                        // Play startup sound
+                        audioManager.play('battle');
+                    }, 500);
+                }
+            }, 100);
+        });
+
+        // Make game objects globally accessible
+        window.gameState = gameState;
+        window.componentDefinitions = componentDefinitions;
+        window.audioManager = audioManager;
+        window.achievementSystem = achievementSystem;
+        window.showMode = showMode;
+    </script>
+</body>
+</html>
