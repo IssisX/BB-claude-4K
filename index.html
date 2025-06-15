@@ -967,7 +967,7 @@
     <div id="gameContainer">
         <div id="header">
             <div class="header-left">
-                <h1>âš¡ BattleBots Arena</h1>
+                <h1>⚡️ BattleBots Arena</h1>
                 <div class="level-indicator">
                     Level <span id="playerLevel">1</span>
                 </div>
@@ -2949,6 +2949,9 @@
                 
                 this.arenaHazards = [];
                 this.projectiles = [];
+                this.playerTargetLocked = null;
+                this.targetLockIndicatorElement = null;
+                this.targetLockKeyPressed = false; // Used to detect a single press of the Tab key
                 
                 this.setupArena();
                 this.createBots();
@@ -3263,35 +3266,135 @@
             }
 
             generateAIBotComponents() {
-                // Generate AI bot based on player level
-                const level = gameState.playerData.level;
-                const baseComponents = [
-                    { id: 'control_unit', x: 150, y: 150 },
-                    { id: 'small_wheel', x: 120, y: 150 },
-                    { id: 'small_wheel', x: 180, y: 150 },
-                    { id: 'electric_motor', x: 150, y: 120 },
-                    { id: 'small_battery', x: 150, y: 180 },
-                    { id: 'drill_spike', x: 150, y: 100 }
-                ];
+                const playerLevel = gameState.playerData.level;
+                let selectedTemplateConfig;
 
-                // Add more components based on level
-                if (level >= 3) {
-                    baseComponents.push({ id: 'armor_plating', x: 130, y: 130 });
-                }
-                if (level >= 5) {
-                    baseComponents[5] = { id: 'spinner_blade', x: 150, y: 100 }; // Replace drill with spinner
-                    baseComponents.push({ id: 'servo', x: 140, y: 110 });
-                }
-                if (level >= 7) {
-                    baseComponents.push({ id: 'power_cell', x: 170, y: 180 });
+                // Define AI bot templates
+                // Note: x, y are relative to a conceptual 150,150 center for the AI bot during generation.
+                // The createBotFromComponents function handles the actual world placement.
+                const templates = {
+                    basic: [
+                        { id: 'control_unit', x: 150, y: 150 }, { id: 'small_wheel', x: 120, y: 150 },
+                        { id: 'small_wheel', x: 180, y: 150 }, { id: 'electric_motor', x: 150, y: 120 },
+                        { id: 'small_battery', x: 150, y: 180 }, { id: 'drill_spike', x: 150, y: 90 }
+                    ],
+                    tank: [
+                        { id: 'control_unit', x: 150, y: 150 }, { id: 'tank_track', x: 100, y: 150 },
+                        { id: 'tank_track', x: 200, y: 150 }, { id: 'electric_motor', x: 150, y: 110 },
+                        { id: 'power_cell', x: 150, y: 190 }, { id: 'armor_plating', x: 150, y: 70 },
+                        { id: 'armor_plating', x: 110, y: 150 }, { id: 'hammer_arm', x: 190, y: 100 },
+                        { id: 'servo', x: 180, y: 110 }
+                    ],
+                    spinner: [
+                        { id: 'advanced_cpu', x: 150, y: 150, requiredUnlockLevel: 5 }, { id: 'control_unit', x: 150, y: 150 }, // Fallback if advanced_cpu not available
+                        { id: 'racing_wheel', x: 120, y: 150, requiredUnlockLevel: 3 }, { id: 'racing_wheel', x: 180, y: 150, requiredUnlockLevel: 3 },
+                        { id: 'turbo_motor', x: 150, y: 110, requiredUnlockLevel: 4 },
+                        { id: 'small_battery', x: 150, y: 190 },
+                        { id: 'spinner_blade', x: 150, y: 70, requiredUnlockLevel: 4 },
+                        { id: 'gyroscope', x: 110, y: 110, requiredUnlockLevel: 5 }
+                    ],
+                    fast_attacker: [
+                        { id: 'control_unit', x: 150, y: 150 },
+                        { id: 'small_wheel', x: 120, y: 130 }, { id: 'small_wheel', x: 180, y: 130 },
+                        { id: 'small_wheel', x: 120, y: 170 }, { id: 'small_wheel', x: 180, y: 170 },
+                        { id: 'turbo_motor', x: 130, y: 100, requiredUnlockLevel: 4 }, { id: 'electric_motor', x: 130, y: 100 }, // Fallback
+                        { id: 'small_battery', x: 170, y: 100 },
+                        { id: 'drill_spike', x: 150, y: 70 }, { id: 'drill_spike', x: 150, y: 190, requiredUnlockLevel:2 }
+                    ]
+                };
+
+                let availableTemplatePool = [];
+
+                if (playerLevel <= 3) {
+                    availableTemplatePool.push(templates.basic);
+                    if (playerLevel >=2) availableTemplatePool.push(templates.fast_attacker); // simplified version
+                } else if (playerLevel <= 6) {
+                    availableTemplatePool.push(templates.basic);
+                    availableTemplatePool.push(templates.tank);
+                    availableTemplatePool.push(templates.fast_attacker);
+                    if (playerLevel >= 4) availableTemplatePool.push(templates.spinner);
+                } else { // playerLevel 7+
+                    availableTemplatePool.push(templates.tank, templates.spinner, templates.fast_attacker);
+                     // Could add a very strong template here for high levels
                 }
 
-                return baseComponents.map(comp => ({
-                    ...this.findComponentDefinition(comp.id),
-                    x: comp.x,
-                    y: comp.y,
-                    uid: Date.now() + Math.random()
-                })).filter(comp => comp.id);
+                // Filter templates based on component availability for the AI (rough guide, AI can be a bit ahead/behind)
+                // This ensures AI doesn't use components way too advanced for player's current experience
+                const AIEffectiveUnlockLevel = playerLevel + 2; // AI can be slightly ahead
+
+                availableTemplatePool = availableTemplatePool.filter(config => {
+                    return config.every(compRef => {
+                        const def = this.findComponentDefinition(compRef.id);
+                        return def && (def.unlockLevel || 1) <= AIEffectiveUnlockLevel;
+                    });
+                });
+                if(availableTemplatePool.length === 0) availableTemplatePool.push(templates.basic); // Fallback
+
+                selectedTemplateConfig = availableTemplatePool[Math.floor(Math.random() * availableTemplatePool.length)];
+
+                // Process the selected template config
+                let finalComponentsConfig = [];
+                selectedTemplateConfig.forEach(compRef => {
+                    // Handle primary/fallback components based on level
+                    if (compRef.id === 'advanced_cpu' && (!this.findComponentDefinition('advanced_cpu') || (this.findComponentDefinition('advanced_cpu').unlockLevel > AIEffectiveUnlockLevel))) {
+                        // Don't add advanced_cpu, the fallback control_unit will be added instead.
+                        return;
+                    }
+                    if (compRef.id === 'control_unit' && selectedTemplateConfig.some(c => c.id === 'advanced_cpu' && this.findComponentDefinition('advanced_cpu') && (this.findComponentDefinition('advanced_cpu').unlockLevel <= AIEffectiveUnlockLevel))) {
+                        // If advanced_cpu is chosen and available, skip the basic control_unit if it's a fallback.
+                        if(selectedTemplateConfig.find(c=>c.id === 'advanced_cpu').requiredUnlockLevel) return;
+                    }
+                     if (compRef.id === 'turbo_motor' && (!this.findComponentDefinition('turbo_motor') || (this.findComponentDefinition('turbo_motor').unlockLevel > AIEffectiveUnlockLevel))) {
+                        return;
+                    }
+                     if (compRef.id === 'electric_motor' && selectedTemplateConfig.some(c => c.id === 'turbo_motor' && this.findComponentDefinition('turbo_motor') && (this.findComponentDefinition('turbo_motor').unlockLevel <= AIEffectiveUnlockLevel))) {
+                        if(selectedTemplateConfig.find(c=>c.id === 'turbo_motor').requiredUnlockLevel) return;
+                    }
+
+                    const definition = this.findComponentDefinition(compRef.id);
+                    if (definition && (definition.unlockLevel || 1) <= AIEffectiveUnlockLevel) {
+                         // For higher player levels, consider upgrading some AI components
+                        let currentDefinition = definition;
+                        if (playerLevel >= 7) {
+                            if (compRef.id === 'small_battery' && Math.random() < 0.5 && this.findComponentDefinition('power_cell')?.unlockLevel <= AIEffectiveUnlockLevel) {
+                                currentDefinition = this.findComponentDefinition('power_cell');
+                            } else if (compRef.id === 'electric_motor' &&  Math.random() < 0.4 && this.findComponentDefinition('turbo_motor')?.unlockLevel <= AIEffectiveUnlockLevel){
+                                currentDefinition = this.findComponentDefinition('turbo_motor');
+                            } else if (compRef.id === 'steel_beam' &&  Math.random() < 0.3 && this.findComponentDefinition('titanium_frame')?.unlockLevel <= AIEffectiveUnlockLevel){
+                                // currentDefinition = this.findComponentDefinition('titanium_frame'); // Example, ensure x,y make sense
+                            }
+                        }
+                        finalComponentsConfig.push({
+                            ...currentDefinition, // Spread the full definition
+                            x: compRef.x,
+                            y: compRef.y,
+                            uid: Date.now() + Math.random() + performance.now() // More unique UID
+                        });
+                    } else if (definition) { // Component exists but too high level, use fallback or basic if possible
+                        if (compRef.id === 'advanced_cpu') finalComponentsConfig.push({...this.findComponentDefinition('control_unit'), x: compRef.x, y: compRef.y, uid: Date.now() + Math.random()});
+                        else if (compRef.id === 'turbo_motor') finalComponentsConfig.push({...this.findComponentDefinition('electric_motor'), x: compRef.x, y: compRef.y, uid: Date.now() + Math.random()});
+                        // Add other fallbacks if necessary
+                    }
+                });
+
+                // Ensure core components are present if missed by complex logic
+                if (!finalComponentsConfig.some(c => c.type === 'core')) {
+                     finalComponentsConfig.unshift({ ...this.findComponentDefinition('control_unit'), x: 150, y: 150, uid: Date.now() + Math.random() });
+                }
+                if (!finalComponentsConfig.some(c => c.type === 'wheel' || c.type === 'track')) { // Assuming tank_track is type 'track' or 'wheel'
+                    finalComponentsConfig.push({ ...this.findComponentDefinition('small_wheel'), x: 120, y: 150, uid: Date.now() + Math.random() });
+                    finalComponentsConfig.push({ ...this.findComponentDefinition('small_wheel'), x: 180, y: 150, uid: Date.now() + Math.random() });
+                }
+                if (!finalComponentsConfig.some(c => c.type === 'motor')) {
+                    finalComponentsConfig.push({ ...this.findComponentDefinition('electric_motor'), x: 150, y: 120, uid: Date.now() + Math.random() });
+                }
+                if (!finalComponentsConfig.some(c => c.type === 'battery')) {
+                    finalComponentsConfig.push({ ...this.findComponentDefinition('small_battery'), x: 150, y: 180, uid: Date.now() + Math.random() });
+                }
+
+
+                console.log("Generated AI Bot with components:", finalComponentsConfig.map(c=>c.id));
+                return finalComponentsConfig.filter(comp => comp && comp.id); // Final filter for sanity
             }
 
             findComponentDefinition(componentId) {
@@ -3342,11 +3445,65 @@
 
                 // Update loop
                 Events.on(this.engine, 'beforeUpdate', () => {
+                    this.handleTargetLockInput(); // Handle input for toggling lock
                     this.updateBots();
                     this.updateHazards();
                     this.updateProjectiles();
+                    this.updateTargetLockIndicator(); // Update visual indicator
                     this.checkVictoryConditions();
                 });
+            }
+
+            handleTargetLockInput() {
+                if (gameState.controls.targetLock && !this.targetLockKeyPressed) {
+                    this.toggleTargetLock();
+                }
+                this.targetLockKeyPressed = gameState.controls.targetLock;
+            }
+
+            toggleTargetLock() {
+                if (this.playerTargetLocked) {
+                    this.playerTargetLocked = null;
+                    if (this.targetLockIndicatorElement) {
+                        this.targetLockIndicatorElement.remove();
+                        this.targetLockIndicatorElement = null;
+                    }
+                    console.log("Target Unlocked");
+                } else if (this.aiBot && this.aiBot.core && this.aiBot.core.position) { // Ensure AI bot and its core exist
+                    this.playerTargetLocked = this.aiBot.core;
+                    console.log("Target Locked on AI Core");
+                    // Visual indicator will be created by updateTargetLockIndicator
+                }
+            }
+
+            updateTargetLockIndicator() {
+                const battleCanvas = document.getElementById('battleCanvas');
+                if (!battleCanvas) return;
+
+                if (this.playerTargetLocked && this.playerTargetLocked.position) {
+                    if (!this.targetLockIndicatorElement) {
+                        this.targetLockIndicatorElement = document.createElement('div');
+                        this.targetLockIndicatorElement.style.position = 'absolute'; // Relative to battleCanvas
+                        this.targetLockIndicatorElement.style.width = '50px';
+                        this.targetLockIndicatorElement.style.height = '50px';
+                        this.targetLockIndicatorElement.style.border = '3px dashed red';
+                        this.targetLockIndicatorElement.style.borderRadius = '50%';
+                        this.targetLockIndicatorElement.style.boxSizing = 'border-box';
+                        this.targetLockIndicatorElement.style.pointerEvents = 'none';
+                        this.targetLockIndicatorElement.style.zIndex = '1001';
+                        battleCanvas.appendChild(this.targetLockIndicatorElement);
+                    }
+                    // Matter.js positions are world coordinates. Assuming (0,0) of canvas is world (0,0).
+                    const targetX = this.playerTargetLocked.position.x;
+                    const targetY = this.playerTargetLocked.position.y;
+                    this.targetLockIndicatorElement.style.left = (targetX - 25) + 'px'; // Center the 50x50 div
+                    this.targetLockIndicatorElement.style.top = (targetY - 25) + 'px';
+                } else {
+                    if (this.targetLockIndicatorElement) {
+                        this.targetLockIndicatorElement.remove();
+                        this.targetLockIndicatorElement = null;
+                    }
+                }
             }
 
             updateBots() {
@@ -3389,15 +3546,40 @@
                     }
                 });
 
-                // Rotation with gyroscope stabilization
-                const gyroStabilization = bot.bodies.find(b => b.component?.id === 'gyroscope')?.component?.stabilization || 0;
+                // Rotation with gyroscope stabilization and target lock override for player
+                const gyroStabilization = bot.core.component?.id === 'gyroscope' ? (bot.core.component.stabilization || 0) :
+                                          (bot.bodies.find(b => b.component?.id === 'gyroscope')?.component?.stabilization || 0);
                 const adjustedTorque = torque * (1 + gyroStabilization);
 
-                if (controls.left) {
-                    Body.setAngularVelocity(bot.core, -adjustedTorque);
-                }
-                if (controls.right) {
-                    Body.setAngularVelocity(bot.core, adjustedTorque);
+                if (bot.tag === 'player' && this.playerTargetLocked && this.playerBot?.core && this.playerTargetLocked.position) {
+                    const playerPos = this.playerBot.core.position;
+                    const targetPos = this.playerTargetLocked.position;
+                    const angleToTarget = Math.atan2(targetPos.y - playerPos.y, targetPos.x - playerPos.x);
+
+                    let angleDifference = angleToTarget - this.playerBot.core.angle;
+                    while (angleDifference < -Math.PI) angleDifference += 2 * Math.PI;
+                    while (angleDifference > Math.PI) angleDifference -= 2 * Math.PI;
+
+                    const rotationSpeedFactor = 0.1; // Determines how quickly the bot snaps to target. Adjust as needed.
+                    let desiredAngularVelocity = angleDifference * rotationSpeedFactor * Matter.Engine.timingScale; // Scale with engine timing
+
+                    const maxLockOnAngularVelocity = adjustedTorque * 1.5; // Can turn faster than manual but not instantly
+                    desiredAngularVelocity = Math.max(-maxLockOnAngularVelocity, Math.min(maxLockOnAngularVelocity, desiredAngularVelocity));
+
+                    // Only apply if there's a significant difference to prevent jitter
+                    if (Math.abs(angleDifference) > 0.05) { // Threshold in radians
+                       Body.setAngularVelocity(this.playerBot.core, desiredAngularVelocity);
+                    } else {
+                       Body.setAngularVelocity(this.playerBot.core, 0); // Stop rotation when aligned
+                    }
+                } else {
+                    if (controls.left) {
+                        Body.setAngularVelocity(bot.core, -adjustedTorque);
+                    } else if (controls.right) {
+                        Body.setAngularVelocity(bot.core, adjustedTorque);
+                    } else if (!gyroStabilization && bot.core.angularVelocity !== 0) {
+                         Body.setAngularVelocity(bot.core, bot.core.angularVelocity * 0.92); // Apply some angular damping
+                    }
                 }
             }
 
@@ -3812,72 +3994,125 @@
                 gameState.battleActive = false;
                 clearInterval(this.timerInterval);
                 
-                // Calculate battle duration
                 const duration = Math.floor((Date.now() - this.battleStartTime) / 1000);
                 const minutes = Math.floor(duration / 60);
                 const seconds = duration % 60;
                 
-                // Show game over overlay
                 const overlay = document.getElementById('gameOverlay');
                 const resultText = document.getElementById('gameResult');
-                
                 overlay.style.display = 'flex';
                 
                 let xpGained = 0;
-                if (result === 'victory') {
+                let playerWon = false; // Determine if the player was the victor
+
+                if (result === 'victory') { // 'victory' here means the player's bot (this.playerBot tag) won
                     resultText.textContent = 'VICTORY!';
                     resultText.className = 'victory';
                     xpGained = 100 + gameState.battleStats.damageDealt;
                     audioManager.play('victory');
+                    playerWon = true;
                 } else if (result === 'timeout') {
                     resultText.textContent = 'TIMEOUT!';
                     resultText.className = 'defeat';
                     xpGained = 25;
-                } else {
+                    playerWon = false; // Player loses on timeout in tournament
+                } else { // 'defeat' means player's bot lost
                     resultText.textContent = 'DEFEAT!';
                     resultText.className = 'defeat';
                     xpGained = 25 + Math.floor(gameState.battleStats.damageDealt / 2);
                     audioManager.play('defeat');
+                    playerWon = false;
                 }
 
-                // Update battle stats display
                 document.getElementById('damageDealt').textContent = Math.round(gameState.battleStats.damageDealt);
                 document.getElementById('hitsLanded').textContent = gameState.battleStats.hitsLanded;
                 document.getElementById('battleDuration').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
                 document.getElementById('xpGained').textContent = `+${xpGained}`;
 
-                // Save battle history
+                const enemyIdentifier = gameState.currentTournamentMatch ? gameState.currentTournamentMatch.opponentBotName : 'AI Quick Battle';
                 await db.battleHistory.add({
                     playerBot: JSON.stringify(gameState.placedComponents),
-                    enemyBot: 'AI Opponent',
-                    result: result === 'victory' ? 'victory' : 'defeat',
+                    enemyBot: enemyIdentifier,
+                    result: playerWon ? 'victory' : 'defeat',
                     duration: duration,
                     damageDealt: gameState.battleStats.damageDealt,
                     dateCompleted: new Date()
                 });
 
-                // Award XP
                 await achievementSystem.awardXP(xpGained);
 
-                // Stop physics
                 Render.stop(this.render);
                 Engine.clear(this.engine);
+                // World.clear(this.engine.world); // Clear all bodies, constraints, etc. from the world for next battle
+                this.playerTargetLocked = null;
+                if (this.targetLockIndicatorElement) {
+                    this.targetLockIndicatorElement.remove();
+                    this.targetLockIndicatorElement = null;
+                }
 
-                // Setup return button
-                document.getElementById('rematchBtn').onclick = () => {
-                    overlay.style.display = 'none';
-                    // Reset battle
-                    this.resetBattle();
-                };
 
-                document.getElementById('returnBtn').onclick = () => {
-                    showMode('builder');
-                };
+                if (gameState.currentTournamentMatch && gameState.currentTournamentMatch.matchId) {
+                    const currentMatchId = gameState.currentTournamentMatch.matchId;
+                    const winnerOfThisBattle = playerWon ? "Your Bot" : gameState.currentTournamentMatch.opponentBotName;
+
+                    console.log(`Tournament match ${currentMatchId} ended. Winner: ${winnerOfThisBattle}`);
+                    updateTournamentBracket(currentMatchId, winnerOfThisBattle);
+
+                    gameState.currentTournamentMatch = null;
+
+                    document.getElementById('rematchBtn').style.display = 'none';
+                    document.getElementById('returnBtn').textContent = 'ðŸ† Back to Tournament';
+                    document.getElementById('returnBtn').onclick = () => {
+                        overlay.style.display = 'none';
+                        World.clear(this.engine.world); // Ensure world is clear before switching mode
+                        this.engine.world.bodies = []; // Reset bodies explicitly
+                        this.engine.world.constraints = []; // Reset constraints
+                        showMode('tournament');
+                    };
+                    // No automatic AI simulation here, it's handled by updateTournamentBracket and showMode('tournament')
+                } else { // Quick Battle
+                    document.getElementById('rematchBtn').style.display = 'inline-block';
+                    document.getElementById('returnBtn').textContent = 'ðŸ  Workshop';
+                    document.getElementById('rematchBtn').onclick = () => {
+                        overlay.style.display = 'none';
+                         World.clear(this.engine.world);
+                        this.engine.world.bodies = [];
+                        this.engine.world.constraints = [];
+                this.playerTargetLocked = null;
+                if (this.targetLockIndicatorElement) {
+                    this.targetLockIndicatorElement.remove();
+                    this.targetLockIndicatorElement = null;
+                }
+                        this.resetBattle();
+                    };
+                    document.getElementById('returnBtn').onclick = () => {
+                        overlay.style.display = 'none';
+                        World.clear(this.engine.world);
+                        this.engine.world.bodies = [];
+                        this.engine.world.constraints = [];
+                 this.playerTargetLocked = null;
+                if (this.targetLockIndicatorElement) {
+                    this.targetLockIndicatorElement.remove();
+                    this.targetLockIndicatorElement = null;
+                }
+                        showMode('builder');
+                    };
+                }
             }
 
             resetBattle() {
                 // Clear existing world
-                World.clear(this.engine.world);
+                World.clear(this.engine.world); // Clears bodies, constraints, composites from the world
+                this.engine.world.bodies = []; // Explicitly reset arrays if Matter.js doesn't fully clear them
+                this.engine.world.constraints = [];
+                this.engine.world.composites = [];
+
+
+                this.playerTargetLocked = null;
+                if (this.targetLockIndicatorElement) {
+                    this.targetLockIndicatorElement.remove();
+                    this.targetLockIndicatorElement = null;
+                }
                 
                 // Reset stats
                 gameState.battleStats = {
@@ -3910,12 +4145,175 @@
         }
 
         // Tournament System
-        function startTournamentMatch(matchId) {
-            // This would start a specific tournament match
-            console.log('Starting tournament match:', matchId);
-            showMode('battle');
-            window.battleMode = new EnhancedBattleMode();
+        const tournamentState = {
+            currentRound: 'quarterfinals',
+            winners: {} // Stores winners of matches, e.g., winners.qf1 = "Bot Name"
+        };
+        window.tournamentState = tournamentState; // Make it accessible
+
+        // Also add a property to gameState for the current tournament match details if a battle is part of a tournament
+        gameState.currentTournamentMatch = null;
+
+        function updateTournamentBracket(matchId, winnerName) {
+            const matchElement = document.querySelector(`.bracket-match[data-match="${matchId}"]`);
+            if (!matchElement) {
+                console.error(`Match element not found for ${matchId}`);
+                return;
+            }
+
+            console.log(`Updating bracket for ${matchId}, winner: ${winnerName}`);
+
+            const botElements = matchElement.querySelectorAll('.match-bot');
+            botElements.forEach(botEl => {
+                if (botEl.textContent.trim() === winnerName.trim()) {
+                    botEl.classList.add('winner');
+                }
+            });
+
+            const button = matchElement.querySelector('button.button'); // More specific selector
+            const statusDiv = matchElement.querySelector('div:not(.match-bots)');
+
+            if (button) {
+                button.textContent = `Winner: ${winnerName}`;
+                button.disabled = true;
+            } else if (statusDiv && statusDiv.textContent.includes("AI vs AI")) {
+                statusDiv.innerHTML = `Winner: ${winnerName}`;
+            }
+
+            tournamentState.winners[matchId] = winnerName;
+
+            let nextMatchId = null;
+            let nextSlotIndex = 0;
+
+            if (matchId === 'qf1') { nextMatchId = 'sf1'; nextSlotIndex = 0; }
+            else if (matchId === 'qf2') { nextMatchId = 'sf1'; nextSlotIndex = 1; }
+            // Assuming qf3, qf4 for sf2 if they existed. For now, only 2 QFs.
+            else if (matchId === 'sf1') { nextMatchId = 'final'; nextSlotIndex = 0; }
+            // Add sf2 logic if more QFs are added: else if (matchId === 'sf2') { nextMatchId = 'final'; nextSlotIndex = 1; }
+
+
+            if (nextMatchId) {
+                const nextMatchElement = document.querySelector(`.bracket-match[data-match="${nextMatchId}"]`);
+                if (nextMatchElement) {
+                    const nextBotSlots = nextMatchElement.querySelectorAll('.match-bot');
+                    if (nextBotSlots.length > nextSlotIndex && (nextBotSlots[nextSlotIndex].textContent === 'TBD' || nextBotSlots[nextSlotIndex].textContent === 'Champion' || nextBotSlots[nextSlotIndex].textContent === 'Challenger')) {
+                        nextBotSlots[nextSlotIndex].textContent = winnerName;
+                    }
+
+                    const p1 = nextBotSlots[0] ? nextBotSlots[0].textContent.trim() : 'TBD';
+                    const p2 = nextBotSlots[1] ? nextBotSlots[1].textContent.trim() : 'TBD';
+
+                    if (p1 !== 'TBD' && p1 !== 'Champion' && p1 !== 'Challenger' &&
+                        p2 !== 'TBD' && p2 !== 'Champion' && p2 !== 'Challenger') {
+                        const nextMatchButton = nextMatchElement.querySelector('button.button');
+                        const nextMatchStatusDiv = nextMatchElement.querySelector('div:not(.match-bots)');
+
+                        if (nextMatchButton && nextMatchButton.disabled) { // Check if it was previously locked
+                            nextMatchButton.disabled = false;
+                            nextMatchButton.textContent = 'Fight!';
+                        } else if (nextMatchStatusDiv && nextMatchStatusDiv.textContent === "Locked") {
+                            nextMatchStatusDiv.textContent = (p1 !== "Your Bot" && p2 !== "Your Bot") ? 'AI vs AI' : 'Ready';
+                        }
+
+                        if (p1 !== "Your Bot" && p2 !== "Your Bot") {
+                            setTimeout(() => simulateAIMatch(nextMatchId), 600); // Increased delay slightly
+                        }
+                    }
+                }
+            }
+            // After any bracket update, check if other AI matches can be simulated (e.g. if a new TBD was filled)
+            setTimeout(simulateAIMatches, 200);
         }
+        window.updateTournamentBracket = updateTournamentBracket;
+
+        function startTournamentMatch(matchId) {
+            const matchElement = document.querySelector(`.bracket-match[data-match="${matchId}"]`);
+            if (!matchElement) return;
+
+            const botElements = matchElement.querySelectorAll('.match-bot');
+            const bot1Name = botElements[0] ? botElements[0].textContent.trim() : 'TBD';
+            const bot2Name = botElements[1] ? botElements[1].textContent.trim() : 'TBD';
+
+            if (bot1Name === 'TBD' || bot2Name === 'TBD' || bot1Name === 'Champion' || bot2Name === 'Challenger') {
+                console.log("Match not ready or placeholder:", matchId);
+                return;
+            }
+
+            if (bot1Name === "Your Bot" || bot2Name === "Your Bot") {
+                console.log('Starting player tournament match:', matchId);
+                gameState.currentTournamentMatch = {
+                    matchId: matchId,
+                    playerBotName: "Your Bot",
+                    opponentBotName: bot1Name === "Your Bot" ? bot2Name : bot1Name
+                };
+                // Crucially, set the opponent for the battle system
+                // This might require EnhancedBattleMode to accept opponent details
+                // For now, we assume endBattle will use gameState.currentTournamentMatch.opponentBotName
+                showMode('battle');
+            } else {
+                // This case should ideally be handled by simulateAIMatches,
+                // but if a button for an AI match was somehow enabled and clicked:
+                console.log('Simulating AI vs AI match (from startTournamentMatch click):', matchId);
+                const winnerName = Math.random() < 0.5 ? bot1Name : bot2Name;
+                updateTournamentBracket(matchId, winnerName);
+                setTimeout(simulateAIMatches, 100);
+            }
+        }
+        window.startTournamentMatch = startTournamentMatch;
+
+        function simulateAIMatch(matchId) {
+            const matchElement = document.querySelector(`.bracket-match[data-match="${matchId}"]`);
+            if (!matchElement || tournamentState.winners[matchId]) {
+                return;
+            }
+
+            const botElements = matchElement.querySelectorAll('.match-bot');
+            const bot1Name = botElements[0] ? botElements[0].textContent.trim() : 'TBD';
+            const bot2Name = botElements[1] ? botElements[1].textContent.trim() : 'TBD';
+
+            const button = matchElement.querySelector('button.button');
+            const statusDiv = matchElement.querySelector('div:not(.match-bots)');
+
+            if (bot1Name !== "Your Bot" && bot2Name !== "Your Bot" &&
+                bot1Name !== "TBD" && bot2Name !== "TBD" &&
+                !(button && button.textContent.startsWith("Winner"))) {
+
+                console.log(`Simulating AI match: ${matchId} between ${bot1Name} and ${bot2Name}`);
+                const winner = Math.random() < 0.5 ? bot1Name : bot2Name;
+                updateTournamentBracket(matchId, winner); // This will handle UI and next steps
+            }
+        }
+
+        function simulateAIMatches() {
+            console.log("Attempting to simulate all pending AI matches...");
+            const allMatches = document.querySelectorAll('.bracket-match');
+            allMatches.forEach(matchElement => {
+                const matchId = matchElement.dataset.match;
+                if (tournamentState.winners[matchId]) {
+                    return;
+                }
+
+                const botElements = matchElement.querySelectorAll('.match-bot');
+                const bot1Name = botElements[0] ? botElements[0].textContent.trim() : 'TBD';
+                const bot2Name = botElements[1] ? botElements[1].textContent.trim() : 'TBD';
+
+                const button = matchElement.querySelector('button.button');
+                const statusDiv = matchElement.querySelector('div:not(.match-bots)');
+                // Check if it's marked as "AI vs AI" or if it's a non-player, non-TBD match without a winner button
+                const isPotentiallySimulatableAI = (statusDiv && statusDiv.textContent === "AI vs AI") ||
+                                                 (bot1Name !== "Your Bot" && bot2Name !== "Your Bot" &&
+                                                  bot1Name !== "TBD" && bot2Name !== "TBD" &&
+                                                  (!button || (button && !button.textContent.startsWith("Winner") && button.disabled)));
+
+
+                if (isPotentiallySimulatableAI) {
+                    console.log(`Simulating AI match (from simulateAIMatches loop): ${matchId}`);
+                    const winner = Math.random() < 0.5 ? bot1Name : bot2Name;
+                    updateTournamentBracket(matchId, winner);
+                }
+            });
+        }
+        window.simulateAIMatches = simulateAIMatches;
 
         // Mode switching function
         function showMode(mode) {
@@ -3924,7 +4322,49 @@
             document.getElementById('tournamentMode').style.display = mode === 'tournament' ? 'block' : 'none';
             
             gameState.mode = mode;
+
+            if (mode === 'tournament') {
+                console.log("Switched to tournament mode. Updating bracket display and simulating AI matches.");
+                if (window.battleMode && typeof window.battleMode.cleanupBattleElements === 'function') {
+                    window.battleMode.cleanupBattleElements();
+                }
+                // Refresh bracket display from tournamentState.winners
+                const allMatches = document.querySelectorAll('.bracket-match');
+                allMatches.forEach(matchEl => {
+                    const matchId = matchEl.dataset.match;
+                    if (tournamentState.winners[matchId]) {
+                        const winnerName = tournamentState.winners[matchId];
+                        const botDivs = matchEl.querySelectorAll('.match-bot');
+                        botDivs.forEach(b => { if(b.textContent.trim() === winnerName) b.classList.add('winner'); });
+                        const btn = matchEl.querySelector('button.button');
+                        const status = matchEl.querySelector('div:not(.match-bots)');
+                        if (btn) {
+                            btn.textContent = `Winner: ${winnerName}`;
+                            btn.disabled = true;
+                        } else if (status && status.textContent.includes("AI vs AI")) {
+                            status.innerHTML = `Winner: ${winnerName}`;
+                        }
+                    }
+                });
+                setTimeout(simulateAIMatches, 200);
+            } else if (mode === 'battle' && gameState.currentTournamentMatch) {
+                 // If entering battle mode for a tournament match, ensure battle system is set up
+                 window.battleMode = new EnhancedBattleMode(); // This will call its constructor
+            } else if (mode !== 'battle' && window.battleMode) { // Cleanup if switching away from battle
+                 if (typeof window.battleMode.cleanupBattleElements === 'function') {
+                    window.battleMode.cleanupBattleElements();
+                }
+                window.battleMode = null; // Dereference
+            }
         }
+        EnhancedBattleMode.prototype.cleanupBattleElements = function() {
+            if (this.targetLockIndicatorElement) {
+                this.targetLockIndicatorElement.remove();
+                this.targetLockIndicatorElement = null;
+            }
+            this.playerTargetLocked = null;
+            // Potentially other battle-specific DOM elements could be cleaned up here
+        };
 
         // Sound control
         document.getElementById('soundToggle').addEventListener('click', () => {
